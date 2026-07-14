@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { FriendsPage } from './components/FriendsPage';
 import { albumCatalog, initialQuantities, sections, stickers } from './data/album';
-import { loadRemoteCollection, migrateCollection, saveStickerQuantity, saveUserAlbum } from './lib/collectionRepository';
+import { loadRemoteCollection, migrateCollection, saveStickerQuantity, saveUserAlbum, type RemoteCollectionState } from './lib/collectionRepository';
+import type { PublicProfile } from './lib/socialRepository';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 
 type Filter = 'all' | 'owned' | 'missing' | 'duplicates';
 type ViewMode = 'compact' | 'cards';
 type AuthMode = 'login' | 'signup' | 'forgot' | 'recovery';
-type AppView = 'library' | 'catalog' | 'album';
+type AppView = 'library' | 'catalog' | 'friends' | 'album';
 type LegalPage = 'privacy' | 'cookies' | 'terms';
 
 const STORAGE_KEY = 'colafig-collection-v1';
@@ -99,6 +101,24 @@ function clearPendingAlbum(userId: string, slug: string) {
   window.localStorage.setItem(`${PENDING_ALBUMS_KEY}:${userId}`, JSON.stringify(pending));
 }
 
+function localizeRemoteCollection(remote: RemoteCollectionState, albumSlug = albumCatalog[0].slug) {
+  const prefix = `${albumSlug}:`;
+  const localIdsByCode = Object.fromEntries(stickers.map((sticker) => [sticker.number, sticker.id]));
+  const stickerIdsByLocalId: Record<string, string> = Object.fromEntries(
+    Object.entries(remote.stickerIdsByKey)
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, stickerId]) => [localIdsByCode[key.slice(prefix.length)], stickerId])
+      .filter(([localId]) => Boolean(localId)),
+  );
+  const quantities: Record<string, number> = Object.fromEntries(
+    Object.entries(remote.quantitiesByKey)
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, quantity]) => [localIdsByCode[key.slice(prefix.length)], quantity])
+      .filter(([localId]) => Boolean(localId)),
+  );
+  return { quantities, stickerIdsByLocalId };
+}
+
 function authErrorMessage(mode: AuthMode, code?: string) {
   if (code === 'weak_password') return 'Use uma senha mais forte, com pelo menos 8 caracteres.';
   if (code === 'email_not_confirmed') return 'Confirme seu e-mail antes de entrar.';
@@ -144,9 +164,9 @@ function LegalDocument({ page, onBack, onOpenLegal }: { page: LegalPage; onBack:
         {page === 'privacy' && <article className="legal-content">
           <p className="legal-intro">Esta política explica, em linguagem direta, como o ColaFig trata dados pessoais ao oferecer contas e ferramentas para organizar coleções de figurinhas.</p>
           <section><h2>1. Quem é responsável</h2><p>O controlador dos dados é <strong>Sergio Bernardo</strong>, responsável pelo ColaFig. Para dúvidas ou para exercer direitos relacionados à LGPD, use o canal <a href="mailto:privacidade@sabion.io">privacidade@sabion.io</a>.</p></section>
-          <section><h2>2. Dados tratados</h2><ul><li><strong>Conta:</strong> e-mail, identificador interno e informações técnicas de autenticação.</li><li><strong>Coleções:</strong> álbuns escolhidos, quantidades, repetidas, progresso e última seção visitada.</li><li><strong>Dados técnicos:</strong> endereço IP, data e hora, navegador e registros de segurança que podem ser processados pelos provedores de infraestrutura.</li><li><strong>Preferências locais:</strong> sessão, biblioteca, visualização, aviso de privacidade e cache offline.</li></ul><p>O ColaFig não solicita CPF, endereço, pagamento ou dados pessoais sensíveis.</p></section>
+          <section><h2>2. Dados tratados</h2><ul><li><strong>Conta:</strong> e-mail, identificador interno e informações técnicas de autenticação.</li><li><strong>Perfil social:</strong> nome de usuário, nome exibido, convites e conexões de amizade.</li><li><strong>Coleções:</strong> álbuns escolhidos, quantidades, repetidas, progresso e última seção visitada.</li><li><strong>Dados técnicos:</strong> endereço IP, data e hora, navegador e registros de segurança que podem ser processados pelos provedores de infraestrutura.</li><li><strong>Preferências locais:</strong> sessão, biblioteca, visualização, aviso de privacidade e cache offline.</li></ul><p>O ColaFig não solicita CPF, endereço, pagamento ou dados pessoais sensíveis.</p></section>
           <section><h2>3. Para que usamos os dados</h2><ul><li>Criar e proteger a conta e permitir login e recuperação de senha.</li><li>Manter a biblioteca e o progresso das coleções.</li><li>Prevenir abuso, investigar falhas e proteger o serviço.</li><li>Cumprir obrigações legais e atender solicitações dos titulares.</li></ul><p>Os tratamentos necessários para fornecer a conta e a caderneta se apoiam na execução do serviço solicitado. Segurança e prevenção de abuso podem se apoiar no legítimo interesse, sempre com avaliação de necessidade e respeito aos direitos do titular. Consentimento será solicitado antes de qualquer futura tecnologia opcional que dele dependa.</p></section>
-          <section><h2>4. Com quem os dados podem ser compartilhados</h2><p>Usamos fornecedores de infraestrutura para operar o serviço: <strong>Supabase</strong>, para autenticação e banco de dados, e <strong>GitHub Pages</strong>, para hospedagem do aplicativo. Esses fornecedores podem tratar dados técnicos e operar infraestrutura fora do Brasil conforme seus contratos e políticas. Não vendemos dados pessoais e não os compartilhamos para publicidade.</p></section>
+          <section><h2>4. Compartilhamento e visibilidade social</h2><p>Seu e-mail e suas credenciais permanecem privados. O nome de usuário e o nome exibido podem ser encontrados por outras pessoas autenticadas. Apenas amizades aceitas podem consultar seus álbuns, faltantes, coladas e repetidas, sempre em modo somente leitura. Você pode cancelar convites ou remover uma amizade a qualquer momento.</p><p>Usamos fornecedores de infraestrutura para operar o serviço: <strong>Supabase</strong>, para autenticação e banco de dados, e <strong>GitHub Pages</strong>, para hospedagem do aplicativo. Esses fornecedores podem tratar dados técnicos e operar infraestrutura fora do Brasil conforme seus contratos e políticas. Não vendemos dados pessoais e não os compartilhamos para publicidade.</p></section>
           <section><h2>5. Retenção e exclusão</h2><p>Dados da conta e das coleções são mantidos enquanto a conta estiver ativa ou pelo tempo necessário para cumprir as finalidades informadas. Registros técnicos e cópias de segurança podem permanecer por períodos adicionais definidos pelos provedores ou necessários para segurança e obrigações legais. Dados salvos apenas no dispositivo permanecem até serem apagados pelo usuário, pelo navegador ou pelo próprio aplicativo.</p></section>
           <section><h2>6. Seus direitos</h2><p>Nos termos da LGPD, você pode solicitar confirmação do tratamento, acesso, correção, informação sobre compartilhamentos, portabilidade quando aplicável, oposição, revisão de decisões automatizadas e eliminação ou anonimização quando cabível. Também pode revogar consentimentos futuros. Poderemos pedir informações para confirmar sua identidade antes de atender uma solicitação.</p></section>
           <section><h2>7. Segurança e menores de idade</h2><p>Aplicamos controles de acesso, autenticação, comunicação protegida e políticas de banco que isolam dados entre usuários. Nenhum sistema é totalmente imune a riscos. O ColaFig não é destinado ao uso autônomo por crianças; contas de menores devem ser criadas e acompanhadas por responsável legal.</p></section>
@@ -155,7 +175,7 @@ function LegalDocument({ page, onBack, onOpenLegal }: { page: LegalPage; onBack:
 
         {page === 'cookies' && <article className="legal-content">
           <p className="legal-intro">O ColaFig não usa cookies de publicidade ou ferramentas de analytics. Utilizamos tecnologias essenciais de navegador para manter o serviço funcionando.</p>
-          <section><h2>1. O que é utilizado</h2><div className="storage-table"><div><b>Sessão do Supabase</b><span>Armazenamento local</span><p>Mantém o usuário autenticado com segurança e renova a sessão.</p><em>Essencial</em></div><div><b>Biblioteca e coleção</b><span>Armazenamento local</span><p>Guarda álbuns, quantidades e última seção enquanto a sincronização completa está em implantação.</p><em>Essencial</em></div><div><b>Preferências</b><span>Armazenamento local</span><p>Lembra visualização e o reconhecimento deste aviso.</p><em>Essencial</em></div><div><b>Cache PWA</b><span>Cache Storage</span><p>Armazena arquivos do aplicativo para carregamento rápido e funcionamento offline.</p><em>Essencial</em></div></div></section>
+          <section><h2>1. O que é utilizado</h2><div className="storage-table"><div><b>Sessão do Supabase</b><span>Armazenamento local</span><p>Mantém o usuário autenticado com segurança e renova a sessão.</p><em>Essencial</em></div><div><b>Biblioteca e coleção</b><span>Armazenamento local</span><p>Mantém uma cópia local temporária de álbuns, quantidades e última seção para carregamento rápido e sincronização segura.</p><em>Essencial</em></div><div><b>Preferências</b><span>Armazenamento local</span><p>Lembra visualização e o reconhecimento deste aviso.</p><em>Essencial</em></div><div><b>Cache PWA</b><span>Cache Storage</span><p>Armazena arquivos do aplicativo para carregamento rápido e funcionamento offline.</p><em>Essencial</em></div></div></section>
           <section><h2>2. Tecnologias não utilizadas</h2><p>Não instalamos cookies de publicidade, perfil comportamental ou analytics. Caso isso mude, tecnologias não essenciais permanecerão desativadas por padrão e será apresentada uma escolha específica antes da ativação.</p></section>
           <section><h2>3. Como controlar</h2><p>Você pode apagar dados do site nas configurações do navegador. Isso poderá encerrar sua sessão, remover preferências, apagar o cache offline e, enquanto a sincronização com o banco não estiver concluída, eliminar dados da coleção salvos somente neste dispositivo.</p></section>
           <section><h2>4. Duração</h2><p>A sessão é renovada enquanto válida e removida ao sair ou limpar os dados do site. Preferências e dados locais permanecem até serem substituídos, apagados pelo usuário ou removidos pelo navegador.</p><p>Saiba mais no <a href="https://www.gov.br/anpd/pt-br/centrais-de-conteudo/materiais-educativos-e-publicacoes/guia-orientativo-cookies-e-protecao-de-dados-pessoais.pdf" rel="noreferrer" target="_blank">Guia Orientativo sobre Cookies da ANPD</a>.</p></section>
@@ -164,7 +184,7 @@ function LegalDocument({ page, onBack, onOpenLegal }: { page: LegalPage; onBack:
         {page === 'terms' && <article className="legal-content">
           <p className="legal-intro">Ao criar uma conta ou usar o ColaFig, você concorda com estes termos. Se não concordar, não utilize o serviço.</p>
           <section><h2>1. Finalidade do serviço</h2><p>O ColaFig é uma ferramenta independente para organizar coleções físicas de figurinhas. Não vende figurinhas, não garante a conclusão de coleções e não representa fabricantes, editoras ou organizações esportivas.</p></section>
-          <section><h2>2. Conta e responsabilidade</h2><p>Você deve fornecer um e-mail válido, manter sua senha protegida e comunicar qualquer suspeita de acesso indevido. O uso por menores deve ocorrer sob supervisão e responsabilidade de representante legal.</p></section>
+          <section><h2>2. Conta e responsabilidade</h2><p>Você deve fornecer um e-mail válido, manter sua senha protegida e comunicar qualquer suspeita de acesso indevido. Nomes de usuário e nomes exibidos não podem representar terceiros de forma enganosa ou conter conteúdo ilícito ou ofensivo. O uso por menores deve ocorrer sob supervisão e responsabilidade de representante legal.</p></section>
           <section><h2>3. Uso permitido</h2><p>Não é permitido tentar acessar contas de terceiros, contornar controles de segurança, automatizar requisições abusivas, interferir no funcionamento do serviço ou usar o ColaFig para atividade ilícita.</p></section>
           <section><h2>4. Catálogo e propriedade intelectual</h2><p>O catálogo usa códigos, nomes e informações factuais para organização. Elementos visuais do ColaFig são próprios. Marcas e nomes de terceiros pertencem aos respectivos titulares. Não devem ser enviados scans, cópias integrais de páginas ou outros materiais protegidos sem autorização.</p></section>
           <section><h2>5. Disponibilidade e alterações</h2><p>O serviço pode passar por manutenção, apresentar indisponibilidade ou ter recursos modificados. Empregaremos esforços razoáveis para preservar dados e continuidade, sem prometer operação ininterrupta.</p></section>
@@ -338,6 +358,8 @@ export default function App() {
   const [remoteStickerIds, setRemoteStickerIds] = useState<Record<string, string>>({});
   const [remoteAlbumIds, setRemoteAlbumIds] = useState<Record<string, string>>({});
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'saved' | 'error'>('idle');
+  const [viewedFriend, setViewedFriend] = useState<{ profile: PublicProfile; quantities: Record<string, number>; userAlbums: string[] } | null>(null);
+  const [friendCollectionLoading, setFriendCollectionLoading] = useState(false);
 
   useEffect(() => {
     if (!supabase) {
@@ -377,6 +399,7 @@ export default function App() {
       setRemoteStickerIds({});
       setRemoteAlbumIds({});
       setSyncStatus('idle');
+      setViewedFriend(null);
       return;
     }
     const userId = session.user.id;
@@ -397,21 +420,7 @@ export default function App() {
       setSyncStatus('syncing');
       try {
         const remote = await loadRemoteCollection(userId);
-        const albumSlug = albumCatalog[0].slug;
-        const prefix = `${albumSlug}:`;
-        const localIdsByCode = Object.fromEntries(stickers.map((sticker) => [sticker.number, sticker.id]));
-        const stickerIdsByLocalId: Record<string, string> = Object.fromEntries(
-          Object.entries(remote.stickerIdsByKey)
-            .filter(([key]) => key.startsWith(prefix))
-            .map(([key, stickerId]) => [localIdsByCode[key.slice(prefix.length)], stickerId])
-            .filter(([localId]) => Boolean(localId)),
-        );
-        const remoteQuantities: Record<string, number> = Object.fromEntries(
-          Object.entries(remote.quantitiesByKey)
-            .filter(([key]) => key.startsWith(prefix))
-            .map(([key, quantity]) => [localIdsByCode[key.slice(prefix.length)], quantity])
-            .filter(([localId]) => Boolean(localId)),
-        );
+        const { quantities: remoteQuantities, stickerIdsByLocalId } = localizeRemoteCollection(remote);
         const pendingQuantities = loadPendingQuantities(userId);
         const wasMigrated = window.localStorage.getItem(`${SYNC_MIGRATED_KEY}:${userId}`) === 'true';
         const mergedQuantities = {
@@ -463,9 +472,10 @@ export default function App() {
     window.localStorage.setItem(`${LAST_PAGE_KEY}:${session.user.id}`, activeSection);
   }, [activeSection, collectionOwner, session]);
 
-  const owned = stickers.filter((sticker) => (quantities[sticker.id] ?? 0) > 0).length;
+  const activeQuantities = viewedFriend?.quantities ?? quantities;
+  const owned = stickers.filter((sticker) => (activeQuantities[sticker.id] ?? 0) > 0).length;
   const duplicateCount = stickers.reduce(
-    (total, sticker) => total + Math.max((quantities[sticker.id] ?? 0) - 1, 0),
+    (total, sticker) => total + Math.max((activeQuantities[sticker.id] ?? 0) - 1, 0),
     0,
   );
   const progress = Math.round((owned / stickers.length) * 100);
@@ -474,7 +484,7 @@ export default function App() {
   const normalizedSearch = normalizeSearch(search);
   const matchingStickers = useMemo(() => {
     return stickers.filter((sticker) => {
-        const quantity = quantities[sticker.id] ?? 0;
+        const quantity = activeQuantities[sticker.id] ?? 0;
         const section = sections.find((item) => item.id === sticker.section)!;
         const searchableText = normalizeSearch(
           `${sticker.number} ${sticker.label} ${section.name} ${section.short}`,
@@ -487,7 +497,7 @@ export default function App() {
           (filter === 'duplicates' && quantity > 1);
         return matchesSearch && matchesFilter;
       });
-  }, [filter, normalizedSearch, quantities]);
+  }, [activeQuantities, filter, normalizedSearch]);
 
   const displayedSections = useMemo(
     () => normalizedSearch ? sections : [sections[activeSectionIndex]],
@@ -505,6 +515,7 @@ export default function App() {
   );
 
   const updateQuantity = (id: string, delta: number) => {
+    if (viewedFriend) return;
     const quantity = Math.max(0, Math.min(9, (quantities[id] ?? 0) + delta));
     setQuantities((current) => ({ ...current, [id]: quantity }));
     if (!session) return;
@@ -539,8 +550,35 @@ export default function App() {
   };
 
   const openAlbum = (slug: string) => {
+    setViewedFriend(null);
     setActiveAlbumSlug(slug);
     setAppView('album');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const openFriendCollection = async (profile: PublicProfile) => {
+    setFriendCollectionLoading(true);
+    try {
+      const remote = await loadRemoteCollection(profile.id);
+      const { quantities: friendQuantities } = localizeRemoteCollection(remote);
+      setViewedFriend({ profile, quantities: friendQuantities, userAlbums: remote.userAlbums });
+      setActiveAlbumSlug(remote.userAlbums[0] ?? albumCatalog[0].slug);
+      setActiveSection(sections[0].id);
+      setSearch('');
+      setFilter('all');
+      setAppView('album');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error('Não foi possível abrir a coleção do amigo.', error);
+      throw error;
+    } finally {
+      setFriendCollectionLoading(false);
+    }
+  };
+
+  const navigateTo = (view: Exclude<AppView, 'album'>) => {
+    setViewedFriend(null);
+    setAppView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -570,6 +608,7 @@ export default function App() {
     && normalizeSearch(`${album.name} ${album.category} ${album.year}`).includes(normalizeSearch(catalogSearch)),
   );
   const activeAlbum = albumCatalog.find((album) => album.slug === activeAlbumSlug) ?? albumCatalog[0];
+  const friendHasActiveAlbum = !viewedFriend || viewedFriend.userAlbums.includes(activeAlbum.slug);
 
   const openLegalPage = (page: LegalPage) => {
     window.location.hash = legalHashes[page];
@@ -595,15 +634,16 @@ export default function App() {
 
   return (
     <>
-    <div className="app-shell">
+    <div className="app-shell authenticated-shell">
       <header className="topbar">
-        <a className="brand" href="#top" onClick={() => setAppView('library')} aria-label="ColaFig — meus álbuns">
+        <a className="brand" href="#top" onClick={() => navigateTo('library')} aria-label="ColaFig — meus álbuns">
           <span className="brand-mark" aria-hidden="true">CF</span>
           <span>ColaFig</span>
         </a>
-        <nav aria-label="Navegação principal">
-          <button className={appView === 'library' ? 'nav-active' : ''} onClick={() => setAppView('library')} type="button">Meus álbuns</button>
-          <button className={appView === 'catalog' ? 'nav-active' : ''} onClick={() => setAppView('catalog')} type="button">Catálogo</button>
+        <nav className="app-nav" aria-label="Navegação principal">
+          <button className={appView === 'library' ? 'nav-active' : ''} onClick={() => navigateTo('library')} type="button">Meus álbuns</button>
+          <button className={appView === 'catalog' ? 'nav-active' : ''} onClick={() => navigateTo('catalog')} type="button">Catálogo</button>
+          <button className={appView === 'friends' ? 'nav-active' : ''} onClick={() => navigateTo('friends')} type="button">Amigos</button>
         </nav>
         <div className="account-menu">
           <i className={`sync-status ${syncStatus}`} title={syncStatus === 'error' ? 'Alterações guardadas neste dispositivo; tentaremos sincronizar novamente.' : syncStatus === 'syncing' ? 'Sincronizando coleção' : 'Coleção sincronizada'}>{syncStatus === 'error' ? 'Local' : syncStatus === 'syncing' ? 'Salvando…' : 'Salvo'}</i>
@@ -612,11 +652,13 @@ export default function App() {
         </div>
       </header>
 
+      {friendCollectionLoading && <div className="social-opening" role="status"><span className="brand-mark">CF</span><b>Abrindo a coleção…</b></div>}
+
       {appView === 'library' && (
         <main className="hub-main" id="top">
           <header className="hub-heading">
             <div><span className="eyebrow dark">Sua biblioteca</span><h1>Meus álbuns</h1><p>Acompanhe todas as suas coleções em um só lugar.</p></div>
-            <button className="hub-primary" onClick={() => setAppView('catalog')} type="button"><span>＋</span> Adicionar álbum</button>
+            <button className="hub-primary" onClick={() => navigateTo('catalog')} type="button"><span>＋</span> Adicionar álbum</button>
           </header>
           {userAlbums.length > 0 ? (
             <div className="user-album-grid">
@@ -639,7 +681,7 @@ export default function App() {
               })}
             </div>
           ) : (
-            <section className="empty-library"><span>＋</span><h2>Sua estante está vazia</h2><p>Escolha seu primeiro álbum no catálogo do ColaFig.</p><button onClick={() => setAppView('catalog')} type="button">Explorar catálogo</button></section>
+            <section className="empty-library"><span>＋</span><h2>Sua estante está vazia</h2><p>Escolha seu primeiro álbum no catálogo do ColaFig.</p><button onClick={() => navigateTo('catalog')} type="button">Explorar catálogo</button></section>
           )}
         </main>
       )}
@@ -668,13 +710,15 @@ export default function App() {
         </main>
       )}
 
+      {appView === 'friends' && <FriendsPage onOpenCollection={openFriendCollection} userId={session.user.id} />}
+
       {appView === 'album' && (
       <main className="authenticated-main" id="top">
         <section className="collection-overview" aria-label="Resumo da coleção">
           <div className="overview-heading">
-            <span className="eyebrow dark">Minha caderneta</span>
+            <span className="eyebrow dark">{viewedFriend ? `Coleção de @${viewedFriend.profile.username}` : 'Minha caderneta'}</span>
             <h1>{activeAlbum.shortName}</h1>
-            <p>Você está em <b>{sections[activeSectionIndex].name}</b> · página {activeSectionIndex + 1} de {sections.length}</p>
+            <p>{viewedFriend ? <>Visualização somente leitura · <b>{viewedFriend.profile.displayName || `@${viewedFriend.profile.username}`}</b></> : <>Você está em <b>{sections[activeSectionIndex].name}</b> · página {activeSectionIndex + 1} de {sections.length}</>}</p>
           </div>
           <div className="overview-progress" aria-label={`${progress}% do álbum completo`}>
             <div><span>Progresso</span><strong>{progress}%</strong></div>
@@ -687,10 +731,12 @@ export default function App() {
           </div>
         </section>
 
+        {viewedFriend && <aside className={`friend-view-banner ${friendHasActiveAlbum ? '' : 'empty'}`}><span>◎</span><div><b>{friendHasActiveAlbum ? `Você está vendo o álbum de ${viewedFriend.profile.displayName || `@${viewedFriend.profile.username}`}` : `${viewedFriend.profile.displayName || `@${viewedFriend.profile.username}`} ainda não adicionou este álbum`}</b><p>{friendHasActiveAlbum ? 'Use os filtros para encontrar faltantes e repetidas. Nenhuma alteração pode ser feita aqui.' : 'Quando essa pessoa iniciar a coleção, o progresso aparecerá automaticamente.'}</p></div><button onClick={() => navigateTo('friends')} type="button">← Voltar aos amigos</button></aside>}
+
         <section className="album-section" id="caderneta">
           <div className="album-heading">
             <div><span className="eyebrow dark">Caderneta</span><h2>Figurinhas</h2></div>
-            <p>Marque, filtre e encontre qualquer figurinha do álbum.</p>
+            <p>{viewedFriend ? 'Filtre e consulte as figurinhas desta coleção.' : 'Marque, filtre e encontre qualquer figurinha do álbum.'}</p>
           </div>
 
           <div className="organizer-toolbar">
@@ -750,7 +796,7 @@ export default function App() {
           <div className="continuous-album">
             {stickerGroups.map(({ section, items }) => {
               const sectionIndex = sections.findIndex((item) => item.id === section.id);
-              const sectionOwned = stickers.filter((sticker) => sticker.section === section.id && (quantities[sticker.id] ?? 0) > 0).length;
+              const sectionOwned = stickers.filter((sticker) => sticker.section === section.id && (activeQuantities[sticker.id] ?? 0) > 0).length;
               return (
                 <section className="sticker-section-group" data-section-id={section.id} key={section.id} aria-labelledby={`section-${section.id}`}>
                   <header className="section-divider" id={`section-${section.id}`}>
@@ -760,16 +806,14 @@ export default function App() {
                   </header>
                   <div className={viewMode === 'compact' ? 'sticker-list' : 'sticker-grid'}>
                     {items.map((sticker) => {
-                      const quantity = quantities[sticker.id] ?? 0;
+                      const quantity = activeQuantities[sticker.id] ?? 0;
                       if (viewMode === 'compact') {
                         return (
                           <article className={`compact-sticker ${quantity > 0 ? 'owned' : 'missing'}`} key={sticker.id}>
                             <span className="compact-code">{sticker.number}</span>
                             <div className="compact-copy"><strong>{sticker.label}</strong><small>{section.flag} {section.short} · {section.name}</small></div>
                             {quantity > 1 && <span className="compact-duplicate">+{quantity - 1}</span>}
-                            <div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}>
-                              <button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button><b>{quantity}</b><button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button>
-                            </div>
+                            {viewedFriend ? <span className={`friend-quantity ${quantity > 0 ? 'has' : ''}`}>{quantity === 0 ? 'Falta' : quantity === 1 ? 'Colada' : `${quantity} cópias`}</span> : <div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}><button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button><b>{quantity}</b><button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button></div>}
                           </article>
                         );
                       }
@@ -777,7 +821,7 @@ export default function App() {
                         <article className={`sticker-card ${quantity > 0 ? 'owned' : 'missing'}`} key={sticker.id}>
                           {quantity > 1 && <span className="duplicate-badge">+{quantity - 1}</span>}
                           <div className="sticker-art" style={{ '--team-color': section.color } as React.CSSProperties}><span className="sticker-code">{sticker.number}</span><strong>{section.short}</strong><i aria-hidden="true" /></div>
-                          <div className="sticker-info"><span>{sticker.label}</span><div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}><button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button><b>{quantity}</b><button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button></div></div>
+                          <div className="sticker-info"><span>{sticker.label}</span>{viewedFriend ? <span className={`friend-quantity ${quantity > 0 ? 'has' : ''}`}>{quantity === 0 ? 'Falta' : quantity === 1 ? 'Colada' : `${quantity} cópias`}</span> : <div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}><button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button><b>{quantity}</b><button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button></div>}</div>
                         </article>
                       );
                     })}
