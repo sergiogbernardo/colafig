@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { initialQuantities, sections, stickers } from './data/demoAlbum';
-import { isSupabaseConfigured } from './lib/supabase';
+import { initialQuantities, sections, stickers } from './data/album';
 
 type Filter = 'all' | 'owned' | 'missing' | 'duplicates';
 
-const STORAGE_KEY = 'colafig-demo-collection';
+const STORAGE_KEY = 'colafig-collection-v1';
 
 function loadCollection() {
   try {
@@ -65,10 +64,7 @@ export default function App() {
           <a href="#caderneta">Caderneta</a>
           <a href="#repetidas">Repetidas</a>
         </nav>
-        <button className="profile-button" type="button">
-          <span aria-hidden="true">●</span>
-          Modo demo
-        </button>
+        <a className="profile-button" href="#caderneta">Minha coleção</a>
       </header>
 
       <main id="top">
@@ -79,15 +75,10 @@ export default function App() {
             <p>Marque as que você já colou, encontre as faltantes e mantenha as repetidas prontas para troca.</p>
             <div className="hero-actions">
               <a className="primary-action" href="#caderneta">Abrir caderneta <span>→</span></a>
-              <span className="sync-status">
-                <i className={isSupabaseConfigured ? 'online' : ''} />
-                {isSupabaseConfigured ? 'Supabase configurado' : 'Salvo neste aparelho'}
-              </span>
             </div>
           </div>
           <div className="progress-card" aria-label={`${progress}% do álbum completo`}>
-            <div className="card-pattern" aria-hidden="true"><i /><i /><i /><i /></div>
-            <span className="progress-label">Álbum demo</span>
+            <span className="progress-label">Progresso do álbum</span>
             <strong>{progress}<small>%</small></strong>
             <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>
             <div className="progress-meta">
@@ -183,7 +174,7 @@ export default function App() {
       <footer>
         <a className="brand footer-brand" href="#top"><span className="brand-mark">CF</span><span>ColaFig</span></a>
         <p>Feito para quem vibra a cada figurinha nova.</p>
-        <small>Protótipo independente — sem vínculo com fabricantes ou organizações esportivas.</small>
+        <small>Projeto independente — sem vínculo com fabricantes ou organizações esportivas.</small>
       </footer>
     </div>
   );

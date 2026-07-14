@@ -47,7 +47,6 @@ nav a:hover, nav a.nav-active { opacity: 1; border-color: var(--lime); }
   border-radius: 999px; padding: 10px 15px; color: white; background: rgba(255,255,255,.08);
   font-size: 13px; font-weight: 600;
 }
-.profile-button span { color: var(--lime); }
 
 .hero {
   min-height: 525px;
@@ -71,17 +70,8 @@ nav a:hover, nav a.nav-active { opacity: 1; border-color: var(--lime); }
 .hero-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 .primary-action { display: inline-flex; align-items: center; gap: 26px; padding: 14px 18px 14px 20px; border-radius: 10px; background: var(--lime); color: var(--wine-dark); font-weight: 800; box-shadow: 0 12px 26px rgba(45,0,20,.2); }
 .primary-action span { font-size: 20px; }
-.sync-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,.66); }
-.sync-status i { width: 8px; height: 8px; border-radius: 50%; background: #e9a83a; box-shadow: 0 0 0 4px rgba(233,168,58,.13); }
-.sync-status i.online { background: #75d893; }
-
-.progress-card { min-height: 350px; padding: 34px; border-radius: 30px 6px 30px 6px; overflow: hidden; background: #f4eedd; color: var(--ink); box-shadow: 0 28px 60px rgba(44,0,19,.28); transform: rotate(1.5deg); }
-.card-pattern { position: absolute; inset: 0 0 auto 0; height: 110px; display: grid; grid-template-columns: repeat(4, 1fr); opacity: .98; }
-.card-pattern i:nth-child(1) { background: var(--blue); border-radius: 0 0 60px 0; }
-.card-pattern i:nth-child(2) { background: var(--orange); border-radius: 0 0 50% 50%; }
-.card-pattern i:nth-child(3) { background: var(--green); border-radius: 0 0 0 60px; }
-.card-pattern i:nth-child(4) { background: var(--lime); border-radius: 0 0 0 55px; }
-.progress-label { position: relative; display: block; margin-top: 92px; color: #716c64; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; }
+.progress-card { min-height: 310px; padding: 42px; border-radius: 24px; overflow: hidden; background: #f4eedd; color: var(--ink); box-shadow: 0 28px 60px rgba(44,0,19,.28); }
+.progress-label { position: relative; display: block; color: #716c64; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; }
 .progress-card > strong { display: block; margin-top: 4px; font: 800 78px/1 ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; letter-spacing: -5px; color: var(--wine); }
 .progress-card > strong small { font-size: 30px; letter-spacing: -1px; }
 .progress-track { height: 8px; overflow: hidden; border-radius: 999px; background: #ded7ca; margin: 17px 0 21px; }

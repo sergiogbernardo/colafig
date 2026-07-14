@@ -15,24 +15,9 @@ export const stickers: Sticker[] = sections.flatMap((section) =>
   Array.from({ length: 8 }, (_, index) => ({
     id: `${section.id}-${index + 1}`,
     number: `${section.short} ${String(index + 1).padStart(2, '0')}`,
-    label: index === 0 ? `Escudo ${section.name}` : `Jogador ${index}`,
+    label: index === 0 ? `Escudo ${section.name}` : `Figurinha ${index + 1}`,
     section: section.id,
   })),
 );
 
-export const initialQuantities: Record<string, number> = {
-  'mex-1': 1,
-  'mex-2': 1,
-  'mex-3': 2,
-  'mex-5': 1,
-  'mex-7': 1,
-  'can-1': 1,
-  'can-2': 3,
-  'can-4': 1,
-  'can-6': 1,
-  'usa-1': 1,
-  'usa-3': 1,
-  'usa-4': 2,
-  'usa-5': 1,
-  'usa-8': 1,
-};
+export const initialQuantities: Record<string, number> = {};

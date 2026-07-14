@@ -2,10 +2,10 @@
 
 **Cole, acompanhe, complete.**
 
-Organizador de figurinhas instalável no celular. O primeiro protótipo permite
-marcar figurinhas, controlar repetidas, filtrar a caderneta e acompanhar o
-progresso. Os dados demonstrativos ficam somente no navegador até a conexão do
-Supabase.
+Organizador de figurinhas instalável no celular. Permite marcar figurinhas,
+controlar repetidas, filtrar a caderneta e acompanhar o progresso. A versão
+atual mantém a coleção no navegador; a sincronização por conta será conectada
+ao Supabase na próxima etapa.
 
 O ColaFig é um projeto independente e não possui vínculo com fabricantes de
 álbuns ou organizações esportivas. A interface usa formas e elementos originais;
@@ -27,8 +27,8 @@ npm install
 npm run dev
 ```
 
-O Vite mostrará o endereço local. As mudanças da coleção demo são salvas em
-`localStorage`.
+O Vite mostrará o endereço de desenvolvimento. As mudanças da coleção são
+salvas em `localStorage`.
 
 ## Supabase
 
