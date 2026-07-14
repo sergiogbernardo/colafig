@@ -188,6 +188,7 @@ export default function App() {
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogCategory, setCatalogCategory] = useState<'all' | 'football'>('all');
   const [activeSection, setActiveSection] = useState(sections[0].id);
+  const [visibleSection, setVisibleSection] = useState(sections[0].id);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('compact');
@@ -230,7 +231,10 @@ export default function App() {
     setQuantities(loadCollection(session.user.id));
     setUserAlbums(loadUserAlbums(session.user.id, hasLegacyCollection));
     const lastPage = window.localStorage.getItem(`${LAST_PAGE_KEY}:${session.user.id}`);
-    if (lastPage && sections.some((section) => section.id === lastPage)) setActiveSection(lastPage);
+    if (lastPage && sections.some((section) => section.id === lastPage)) {
+      setActiveSection(lastPage);
+      setVisibleSection(lastPage);
+    }
     setCollectionOwner(session.user.id);
     setLibraryOwner(session.user.id);
   }, [session]);
@@ -327,7 +331,10 @@ export default function App() {
         .filter((entry) => entry.isIntersecting)
         .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
       const sectionId = (current?.target as HTMLElement | undefined)?.dataset.sectionId;
-      if (sectionId) window.localStorage.setItem(`${LAST_PAGE_KEY}:${session.user.id}`, sectionId);
+      if (sectionId) {
+        setVisibleSection(sectionId);
+        window.localStorage.setItem(`${LAST_PAGE_KEY}:${session.user.id}`, sectionId);
+      }
     }, { rootMargin, threshold: 0 });
     groups.forEach((group) => observer.observe(group));
     return () => observer.disconnect();
@@ -342,6 +349,7 @@ export default function App() {
 
   const jumpToSection = (sectionId: string) => {
     setActiveSection(sectionId);
+    setVisibleSection(sectionId);
     setSearch('');
     setLoadedSectionCount(3);
     window.requestAnimationFrame(() => document.querySelector('.organizer-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
@@ -363,6 +371,7 @@ export default function App() {
     && normalizeSearch(`${album.name} ${album.category} ${album.year}`).includes(normalizeSearch(catalogSearch)),
   );
   const activeAlbum = albumCatalog.find((album) => album.slug === activeAlbumSlug) ?? albumCatalog[0];
+  const visibleSectionIndex = sections.findIndex((section) => section.id === visibleSection);
 
   if (!authReady) {
     return <div className="auth-loading"><span className="brand-mark" aria-hidden="true">CF</span><p>Carregando sua coleção…</p></div>;
@@ -452,7 +461,7 @@ export default function App() {
           <div className="overview-heading">
             <span className="eyebrow dark">Minha caderneta</span>
             <h1>{activeAlbum.shortName}</h1>
-            <p>Continue na página {activeSectionIndex + 1}: <b>{sections[activeSectionIndex].name}</b></p>
+            <p>Você está em <b>{sections[visibleSectionIndex].name}</b> · seção {visibleSectionIndex + 1} de {sections.length}</p>
           </div>
           <div className="overview-progress" aria-label={`${progress}% do álbum completo`}>
             <div><span>Progresso</span><strong>{progress}%</strong></div>
@@ -489,8 +498,8 @@ export default function App() {
               </div>
             </div>
             <div className="page-field">
-              <label htmlFor="album-section">Página do álbum</label>
-              <select id="album-section" onChange={(event) => jumpToSection(event.target.value)} value={activeSection}>
+              <label htmlFor="album-section">Ir para seção</label>
+              <select id="album-section" onChange={(event) => jumpToSection(event.target.value)} value={visibleSection}>
                 {sections.map((section, index) => <option key={section.id} value={section.id}>{index + 1}. {section.flag} {section.short} — {section.name}</option>)}
               </select>
             </div>
@@ -514,18 +523,14 @@ export default function App() {
               </div>
             </div>
             <div className="toolbar-lower">
-              {(() => {
-                const section = sections[activeSectionIndex];
-                const sectionStickers = stickers.filter((sticker) => sticker.section === section.id);
-                const sectionOwned = sectionStickers.filter((sticker) => (quantities[sticker.id] ?? 0) > 0).length;
-                return <div className="selected-section" aria-live="polite"><span className="flag">{section.flag}</span><span><b>{section.name}</b><small>Página {activeSectionIndex + 1} de {sections.length} · {sectionOwned}/{sectionStickers.length} coladas</small></span></div>;
-              })()}
               <div className="filters" aria-label="Filtrar figurinhas">
                 {([['all', 'Todas'], ['owned', 'Coladas'], ['missing', 'Faltantes'], ['duplicates', 'Repetidas']] as [Filter, string][]).map(([value, label]) => (
                   <button className={filter === value ? 'selected' : ''} key={value} onClick={() => setFilter(value)} type="button">{label}</button>
                 ))}
               </div>
-              <p className="results-count" aria-live="polite"><b>{availableStickers.length}</b> {normalizedSearch ? 'resultados no álbum' : 'a partir daqui'}</p>
+              <p className="results-count" aria-live="polite">
+                {normalizedSearch ? <><b>{availableStickers.length}</b> resultados no álbum</> : filter !== 'all' ? <><b>{availableStickers.length}</b> com este filtro</> : <><span aria-hidden="true">↓</span> Rolagem contínua</>}
+              </p>
             </div>
           </div>
 

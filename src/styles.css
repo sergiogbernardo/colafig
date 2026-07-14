@@ -230,12 +230,13 @@ a { color: inherit; text-decoration: none; }
 .page-field > label { display: block; margin-bottom: 7px; color: #797168; font-size: 10px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase; }
 .page-field select { width: 100%; height: 44px; padding: 0 38px 0 12px; border: 1px solid #d5cdc1; border-radius: 10px; outline: none; background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 700; }
 .page-field select:focus { border-color: var(--wine); box-shadow: 0 0 0 3px rgba(146,10,67,.1); }
-.toolbar-lower { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(220px, 1fr) auto auto; align-items: center; gap: 14px; padding-top: 11px; border-top: 1px solid #ded7cd; }
+.toolbar-lower { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding-top: 11px; border-top: 1px solid #ded7cd; }
 .toolbar-lower .selected-section { grid-column: auto; grid-row: auto; gap: 9px; }
 .toolbar-lower .selected-section .flag { width: 38px; height: 34px; border-radius: 8px; font-size: 19px; }
 .toolbar-lower .selected-section b { font-size: 12px; }
 .toolbar-lower .selected-section small { font-size: 9px; }
 .toolbar-lower .results-count { grid-column: auto; min-width: 88px; margin: 0; text-align: right; }
+.toolbar-lower .results-count > span { color: var(--wine); font-size: 15px; font-weight: 850; }
 
 .continuous-album { min-height: 240px; }
 .sticker-section-group { margin-bottom: 30px; scroll-margin-top: 250px; }
