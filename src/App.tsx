@@ -391,7 +391,6 @@ export default function App() {
         <nav aria-label="Navegação principal">
           <button className={appView === 'library' ? 'nav-active' : ''} onClick={() => setAppView('library')} type="button">Meus álbuns</button>
           <button className={appView === 'catalog' ? 'nav-active' : ''} onClick={() => setAppView('catalog')} type="button">Catálogo</button>
-          {userAlbums.length > 0 && <button className={appView === 'album' ? 'nav-active' : ''} onClick={() => openAlbum(activeAlbumSlug)} type="button">Caderneta</button>}
         </nav>
         <div className="account-menu">
           <span title={session.user.email}>{session.user.email}</span>
