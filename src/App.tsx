@@ -347,7 +347,7 @@ function PublicLanding({ initialMode = 'login', onOpenLegal }: { initialMode?: A
                   <label>Confirmar nova senha<input autoComplete="new-password" minLength={8} onChange={(event) => setPasswordConfirmation(event.target.value)} required type="password" value={passwordConfirmation} /></label>
                 )}
                 {mode === 'login' && <button className="forgot-link" onClick={() => changeMode('forgot')} type="button">Esqueci minha senha</button>}
-                {mode === 'signup' && <label className="terms-check"><input checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required type="checkbox" /><span>Confirmo que tenho 18 anos ou mais, li e concordo com os <button onClick={() => openLegalFromAuth('terms')} type="button">Termos de Uso</button> e li a <button onClick={() => openLegalFromAuth('privacy')} type="button">Política de Privacidade</button>.</span></label>}
+                {mode === 'signup' && <label className="terms-check"><input checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required type="checkbox" /><span>Confirmo que li e concordo com os <button onClick={() => openLegalFromAuth('terms')} type="button">Termos de Uso</button> e li a <button onClick={() => openLegalFromAuth('privacy')} type="button">Política de Privacidade</button>.</span></label>}
                 {feedback && <div className={`auth-feedback ${feedback.type}`} role="status">{feedback.text}</div>}
                 <button className="auth-submit" disabled={pending} type="submit">{pending ? 'Aguarde…' : mode === 'signup' ? 'Criar conta' : mode === 'forgot' ? 'Enviar instruções' : mode === 'recovery' ? 'Salvar nova senha' : 'Entrar'}</button>
               </form>
