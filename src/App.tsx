@@ -3,7 +3,6 @@ import type { Session } from '@supabase/supabase-js';
 import { FriendsPage } from './components/FriendsPage';
 import { albumCatalog, initialQuantities, sections, stickers } from './data/album';
 import { loadRemoteCollection, migrateCollection, saveStickerQuantity, saveUserAlbum, type RemoteCollectionState } from './lib/collectionRepository';
-import { confirmAdultEligibility, loadAdultEligibility } from './lib/eligibilityRepository';
 import type { PublicProfile } from './lib/socialRepository';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 
@@ -22,19 +21,6 @@ const AUTH_RETURN_MODE_KEY = 'colafig-auth-return-mode';
 const SYNC_MIGRATED_KEY = 'colafig-supabase-migrated-v1';
 const PENDING_QUANTITIES_KEY = 'colafig-pending-quantities-v1';
 const PENDING_ALBUMS_KEY = 'colafig-pending-albums-v1';
-const AGE_GATE_VERSION = 'adult-only-v1';
-
-function dateYearsAgo(years: number) {
-  const date = new Date();
-  date.setFullYear(date.getFullYear() - years);
-  return date.toISOString().slice(0, 10);
-}
-
-function isAdultBirthDate(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  return value <= dateYearsAgo(18) && value >= dateYearsAgo(120);
-}
-
 const legalHashes: Record<LegalPage, string> = {
   privacy: '#/privacidade',
   cookies: '#/cookies',
@@ -178,12 +164,12 @@ function LegalDocument({ page, onBack, onOpenLegal }: { page: LegalPage; onBack:
         {page === 'privacy' && <article className="legal-content">
           <p className="legal-intro">Esta política explica, em linguagem direta, como o ColaFig trata dados pessoais ao oferecer contas e ferramentas para organizar coleções de figurinhas.</p>
           <section><h2>1. Quem é responsável</h2><p>O controlador dos dados é <strong>Sergio Bernardo</strong>, responsável pelo ColaFig. Para dúvidas ou para exercer direitos relacionados à LGPD, use o canal <a href="mailto:privacidade@sabion.io">privacidade@sabion.io</a>.</p></section>
-          <section><h2>2. Dados tratados</h2><ul><li><strong>Conta:</strong> e-mail, identificador interno e informações técnicas de autenticação.</li><li><strong>Elegibilidade etária:</strong> a data de nascimento é transmitida de forma protegida somente para confirmar se a pessoa tem 18 anos ou mais. A data não é armazenada; guardamos apenas a confirmação, a data da confirmação e a versão da regra aplicada.</li><li><strong>Perfil social:</strong> nome de usuário, nome exibido, convites e conexões de amizade.</li><li><strong>Coleções:</strong> álbuns escolhidos, quantidades, repetidas, progresso e última seção visitada.</li><li><strong>Dados técnicos:</strong> endereço IP, data e hora, navegador e registros de segurança que podem ser processados pelos provedores de infraestrutura.</li><li><strong>Preferências locais:</strong> sessão, biblioteca, visualização, aviso de privacidade e cache offline.</li></ul><p>O ColaFig não solicita CPF, endereço, pagamento ou dados pessoais sensíveis.</p></section>
+          <section><h2>2. Dados tratados</h2><ul><li><strong>Conta:</strong> e-mail, identificador interno e informações técnicas de autenticação.</li><li><strong>Perfil social:</strong> nome de usuário, nome exibido, convites e conexões de amizade.</li><li><strong>Coleções:</strong> álbuns escolhidos, quantidades, repetidas, progresso e última seção visitada.</li><li><strong>Dados técnicos:</strong> endereço IP, data e hora, navegador e registros de segurança que podem ser processados pelos provedores de infraestrutura.</li><li><strong>Preferências locais:</strong> sessão, biblioteca, visualização, aviso de privacidade e cache offline.</li></ul><p>O ColaFig não solicita data de nascimento, CPF, endereço, pagamento ou dados pessoais sensíveis.</p></section>
           <section><h2>3. Para que usamos os dados</h2><ul><li>Criar e proteger a conta e permitir login e recuperação de senha.</li><li>Manter a biblioteca e o progresso das coleções.</li><li>Prevenir abuso, investigar falhas e proteger o serviço.</li><li>Cumprir obrigações legais e atender solicitações dos titulares.</li></ul><p>Os tratamentos necessários para fornecer a conta e a caderneta se apoiam na execução do serviço solicitado. Segurança e prevenção de abuso podem se apoiar no legítimo interesse, sempre com avaliação de necessidade e respeito aos direitos do titular. Consentimento será solicitado antes de qualquer futura tecnologia opcional que dele dependa.</p></section>
           <section><h2>4. Compartilhamento e visibilidade social</h2><p>Seu e-mail e suas credenciais permanecem privados. O nome de usuário e o nome exibido podem ser encontrados por outras pessoas autenticadas. Apenas amizades aceitas podem consultar seus álbuns, faltantes, coladas e repetidas, sempre em modo somente leitura. Você pode cancelar convites ou remover uma amizade a qualquer momento.</p><p>Usamos fornecedores de infraestrutura para operar o serviço: <strong>Supabase</strong>, para autenticação e banco de dados, e <strong>GitHub Pages</strong>, para hospedagem do aplicativo. Esses fornecedores podem tratar dados técnicos e operar infraestrutura fora do Brasil conforme seus contratos e políticas. Não vendemos dados pessoais e não os compartilhamos para publicidade.</p></section>
           <section><h2>5. Retenção e exclusão</h2><p>Dados da conta e das coleções são mantidos enquanto a conta estiver ativa ou pelo tempo necessário para cumprir as finalidades informadas. Registros técnicos e cópias de segurança podem permanecer por períodos adicionais definidos pelos provedores ou necessários para segurança e obrigações legais. Dados salvos apenas no dispositivo permanecem até serem apagados pelo usuário, pelo navegador ou pelo próprio aplicativo.</p></section>
           <section><h2>6. Seus direitos</h2><p>Nos termos da LGPD, você pode solicitar confirmação do tratamento, acesso, correção, informação sobre compartilhamentos, portabilidade quando aplicável, oposição, revisão de decisões automatizadas e eliminação ou anonimização quando cabível. Também pode revogar consentimentos futuros. Poderemos pedir informações para confirmar sua identidade antes de atender uma solicitação.</p></section>
-          <section><h2>7. Segurança e restrição etária</h2><p>Aplicamos controles de acesso, autenticação, comunicação protegida e políticas de banco que isolam dados entre usuários. Nenhum sistema é totalmente imune a riscos. Nesta fase, o ColaFig é destinado exclusivamente a pessoas com 18 anos ou mais. Contas sem elegibilidade confirmada não acessam coleções nem recursos sociais.</p></section>
+          <section><h2>7. Segurança</h2><p>Aplicamos controles de acesso, autenticação, comunicação protegida e políticas de banco que isolam dados entre usuários. Nenhum sistema é totalmente imune a riscos. Durante o desenvolvimento e os testes, responsáveis devem acompanhar o uso por crianças e adolescentes.</p></section>
           <section><h2>8. Atualizações e referências</h2><p>Esta política poderá ser atualizada quando o serviço, os fornecedores ou a legislação mudarem. Alterações relevantes serão comunicadas no aplicativo e a data acima será revisada.</p><p>Consulte a <a href="https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm" rel="noreferrer" target="_blank">Lei Geral de Proteção de Dados Pessoais</a> e os <a href="https://www.gov.br/anpd/pt-br/centrais-de-conteudo/materiais-educativos-e-publicacoes" rel="noreferrer" target="_blank">materiais oficiais da ANPD</a>.</p></section>
         </article>}
 
@@ -198,7 +184,7 @@ function LegalDocument({ page, onBack, onOpenLegal }: { page: LegalPage; onBack:
         {page === 'terms' && <article className="legal-content">
           <p className="legal-intro">Ao criar uma conta ou usar o ColaFig, você concorda com estes termos. Se não concordar, não utilize o serviço.</p>
           <section><h2>1. Finalidade do serviço</h2><p>O ColaFig é uma ferramenta independente para organizar coleções físicas de figurinhas. Não vende figurinhas, não garante a conclusão de coleções e não representa fabricantes, editoras ou organizações esportivas.</p></section>
-          <section><h2>2. Conta, idade e responsabilidade</h2><p>O ColaFig está disponível somente para pessoas com 18 anos ou mais. Você deve informar dados verdadeiros na confirmação etária, fornecer um e-mail válido, manter sua senha protegida e comunicar qualquer suspeita de acesso indevido. Nomes de usuário e nomes exibidos não podem representar terceiros de forma enganosa ou conter conteúdo ilícito ou ofensivo.</p></section>
+          <section><h2>2. Conta e responsabilidade</h2><p>Você deve fornecer um e-mail válido, manter sua senha protegida e comunicar qualquer suspeita de acesso indevido. Nomes de usuário e nomes exibidos não podem representar terceiros de forma enganosa ou conter conteúdo ilícito ou ofensivo. Durante o desenvolvimento e os testes, o uso por crianças e adolescentes deve ser acompanhado por um responsável.</p></section>
           <section><h2>3. Uso permitido</h2><p>Não é permitido tentar acessar contas de terceiros, contornar controles de segurança, automatizar requisições abusivas, interferir no funcionamento do serviço ou usar o ColaFig para atividade ilícita.</p></section>
           <section><h2>4. Catálogo e propriedade intelectual</h2><p>O catálogo usa códigos, nomes e informações factuais para organização. Elementos visuais do ColaFig são próprios. Marcas e nomes de terceiros pertencem aos respectivos titulares. Não devem ser enviados scans, cópias integrais de páginas ou outros materiais protegidos sem autorização.</p></section>
           <section><h2>5. Disponibilidade e alterações</h2><p>O serviço pode passar por manutenção, apresentar indisponibilidade ou ter recursos modificados. Empregaremos esforços razoáveis para preservar dados e continuidade, sem prometer operação ininterrupta.</p></section>
@@ -221,7 +207,6 @@ function PublicLanding({ initialMode = 'login', onOpenLegal }: { initialMode?: A
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
-  const [birthDate, setBirthDate] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
@@ -234,7 +219,6 @@ function PublicLanding({ initialMode = 'login', onOpenLegal }: { initialMode?: A
     setMode(nextMode);
     setPassword('');
     setPasswordConfirmation('');
-    setBirthDate('');
     setAcceptedTerms(false);
     setFeedback(null);
   };
@@ -279,19 +263,8 @@ function PublicLanding({ initialMode = 'login', onOpenLegal }: { initialMode?: A
       }
 
       if (mode === 'signup') {
-        if (!isAdultBirthDate(birthDate)) {
-          setFeedback({ type: 'error', text: 'O ColaFig está disponível somente para pessoas com 18 anos ou mais.' });
-          return;
-        }
         const emailRedirectTo = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { age_gate_version: AGE_GATE_VERSION, birth_date: birthDate },
-            emailRedirectTo,
-          },
-        });
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo } });
         if (error) throw error;
         if (!data.session) {
           setFeedback({ type: 'success', text: 'Conta criada. Confira seu e-mail para confirmar o cadastro.' });
@@ -340,9 +313,6 @@ function PublicLanding({ initialMode = 'login', onOpenLegal }: { initialMode?: A
                 {mode !== 'forgot' && (
                   <label>{mode === 'recovery' ? 'Nova senha' : 'Senha'}<input autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={8} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" required type="password" value={password} /></label>
                 )}
-                {mode === 'signup' && (
-                  <label>Data de nascimento<input autoComplete="bday" max={dateYearsAgo(18)} min={dateYearsAgo(120)} onChange={(event) => setBirthDate(event.target.value)} required type="date" value={birthDate} /><small className="field-note">Usada somente para confirmar 18+. A data não é armazenada.</small></label>
-                )}
                 {mode === 'recovery' && (
                   <label>Confirmar nova senha<input autoComplete="new-password" minLength={8} onChange={(event) => setPasswordConfirmation(event.target.value)} required type="password" value={passwordConfirmation} /></label>
                 )}
@@ -368,60 +338,9 @@ function PublicLanding({ initialMode = 'login', onOpenLegal }: { initialMode?: A
   );
 }
 
-function AdultEligibilityGate({ email, loadFailed, onConfirmed, onOpenLegal, onSignOut }: {
-  email?: string;
-  loadFailed: boolean;
-  onConfirmed: () => void;
-  onOpenLegal: (page: LegalPage) => void;
-  onSignOut: () => void;
-}) {
-  const [birthDate, setBirthDate] = useState('');
-  const [pending, setPending] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(loadFailed ? 'Não foi possível consultar sua confirmação anterior. Você pode confirmar novamente.' : null);
-
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!isAdultBirthDate(birthDate) || pending) {
-      setFeedback('O ColaFig está disponível somente para pessoas com 18 anos ou mais.');
-      return;
-    }
-    setPending(true);
-    setFeedback(null);
-    try {
-      await confirmAdultEligibility(birthDate);
-      setBirthDate('');
-      onConfirmed();
-    } catch {
-      setFeedback('Não foi possível confirmar a elegibilidade. Verifique a data informada e tente novamente.');
-    } finally {
-      setPending(false);
-    }
-  };
-
-  return (
-    <div className="eligibility-shell">
-      <main className="eligibility-card">
-        <span className="brand-mark" aria-hidden="true">CF</span>
-        <span className="eyebrow dark">Acesso 18+</span>
-        <h1>Confirme sua elegibilidade</h1>
-        <p>Nesta fase, o ColaFig está disponível exclusivamente para maiores de 18 anos. Precisamos confirmar isso antes de liberar coleções e recursos sociais.</p>
-        {email && <small className="eligibility-account">Conta conectada: <b>{email}</b></small>}
-        <form onSubmit={submit}>
-          <label>Data de nascimento<input autoComplete="bday" max={dateYearsAgo(18)} min={dateYearsAgo(120)} onChange={(event) => setBirthDate(event.target.value)} required type="date" value={birthDate} /><small>A data é validada e descartada; armazenamos somente a confirmação 18+.</small></label>
-          {feedback && <div className="auth-feedback error" role="status">{feedback}</div>}
-          <button className="auth-submit" disabled={pending} type="submit">{pending ? 'Confirmando…' : 'Confirmar e continuar'}</button>
-        </form>
-        <p className="eligibility-legal">Ao continuar, você confirma que as informações são verdadeiras. Consulte os <button onClick={() => onOpenLegal('terms')} type="button">Termos</button> e a <button onClick={() => onOpenLegal('privacy')} type="button">Política de Privacidade</button>.</p>
-        <button className="eligibility-signout" onClick={onSignOut} type="button">Sair desta conta</button>
-      </main>
-    </div>
-  );
-}
-
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [adultEligibility, setAdultEligibility] = useState<'idle' | 'checking' | 'confirmed' | 'required' | 'error'>('idle');
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, number>>(initialQuantities);
   const [collectionOwner, setCollectionOwner] = useState<string | null>(null);
@@ -473,23 +392,6 @@ export default function App() {
 
   useEffect(() => {
     if (!session) {
-      setAdultEligibility('idle');
-      return;
-    }
-    let cancelled = false;
-    setAdultEligibility('checking');
-    void loadAdultEligibility(session.user.id)
-      .then(({ confirmed }) => {
-        if (!cancelled) setAdultEligibility(confirmed ? 'confirmed' : 'required');
-      })
-      .catch(() => {
-        if (!cancelled) setAdultEligibility('error');
-      });
-    return () => { cancelled = true; };
-  }, [session]);
-
-  useEffect(() => {
-    if (!session || adultEligibility !== 'confirmed') {
       setCollectionOwner(null);
       setLibraryOwner(null);
       setUserAlbums([]);
@@ -554,7 +456,7 @@ export default function App() {
     };
     void hydrateFromSupabase();
     return () => { cancelled = true; };
-  }, [adultEligibility, session]);
+  }, [session]);
 
   useEffect(() => {
     if (!session || collectionOwner !== session.user.id) return;
@@ -739,14 +641,6 @@ export default function App() {
 
   if (!session || recoveryMode) {
     return <><PublicLanding initialMode={recoveryMode ? 'recovery' : 'login'} onOpenLegal={openLegalPage} /><CookieNotice onOpenCookies={() => openLegalPage('cookies')} /></>;
-  }
-
-  if (adultEligibility === 'idle' || adultEligibility === 'checking') {
-    return <div className="auth-loading"><span className="brand-mark" aria-hidden="true">CF</span><p>Verificando sua elegibilidade…</p></div>;
-  }
-
-  if (adultEligibility === 'required' || adultEligibility === 'error') {
-    return <><AdultEligibilityGate email={session.user.email} loadFailed={adultEligibility === 'error'} onConfirmed={() => setAdultEligibility('confirmed')} onOpenLegal={openLegalPage} onSignOut={() => void supabase?.auth.signOut()} /><CookieNotice onOpenCookies={() => openLegalPage('cookies')} /></>;
   }
 
   return (

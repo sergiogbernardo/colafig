@@ -82,18 +82,14 @@ Critério de aceite: DPA, mecanismo de transferência e lista de subprocessadore
 
 ## Entrega 6 — ECA Digital e menores
 
-Status: contenção provisória 18+ implementada no código e na migration `20260714006000_adult_only_access.sql`; revisão jurídica e adequação à orientação definitiva da ANPD continuam pendentes.
+Status: bloqueio 18+ removido para a fase de desenvolvimento e testes pela migration `20260714007000_remove_adult_gate_for_development.sql`. O produto não coleta data de nascimento.
 
-- Nesta fase, não é oferecida uma experiência para crianças ou adolescentes: novas contas e contas existentes precisam confirmar elegibilidade 18+.
-- A data de nascimento é validada no banco durante a requisição e descartada. O perfil guarda somente o resultado positivo, a data da confirmação e a versão da regra.
-- Campos de elegibilidade enviados pelo navegador são removidos pelo gatilho do banco antes da criação da conta; somente o fluxo controlado do banco pode confirmar a elegibilidade.
-- RLS restritiva bloqueia coleções, biblioteca e amizades para contas sem confirmação, independentemente da interface.
-- Contas existentes passam por uma confirmação obrigatória antes de a aplicação carregar dados locais ou remotos.
-- A autodeclaração de data é uma contenção provisória e não deve ser apresentada como aferição etária robusta ou conformidade jurídica definitiva.
+- Cadastro e uso voltaram a ficar disponíveis sem restrição etária técnica.
+- Termos e Política de Privacidade informam que o ambiente está em desenvolvimento e que o uso por crianças e adolescentes deve ser acompanhado por responsável.
+- Controles de abuso, isolamento por RLS, limites de busca e convites continuam ativos.
+- Antes de produção aberta ao público, ainda será necessário definir o fluxo de responsáveis, privacidade infantil por padrão e controles sociais adequados.
 
-Próximos passos: acompanhar a orientação definitiva da ANPD, prevista no cronograma oficial para agosto de 2026; reavaliar o mecanismo de aferição; obter revisão jurídica; documentar testes e decisão sobre eventual experiência futura para menores.
-
-Critério de aceite provisório: uma conta não confirmada não acessa coleções nem recursos sociais por API, e a data de nascimento não persiste no Auth nem nas tabelas públicas.
+Critério de aceite para testes: contas novas e existentes acessam suas coleções sem informar idade, mantendo o isolamento de dados entre usuários.
 
 ## Ordem recomendada de publicação
 
