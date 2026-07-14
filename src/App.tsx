@@ -99,7 +99,7 @@ export default function App() {
           <div className="section-heading">
             <div>
               <span className="eyebrow dark">Caderneta</span>
-              <h2>Escolha uma seleção</h2>
+              <h2>Escolha uma seção</h2>
             </div>
             <div className="filters" aria-label="Filtrar figurinhas">
               {([
@@ -120,25 +120,30 @@ export default function App() {
             </div>
           </div>
 
-          <div className="section-tabs" role="tablist" aria-label="Seleções">
-            {sections.map((section) => {
-              const sectionOwned = stickers.filter(
-                (sticker) => sticker.section === section.id && (quantities[sticker.id] ?? 0) > 0,
-              ).length;
+          <div className="section-picker">
+            <label htmlFor="album-section">Seção do álbum</label>
+            <select
+              id="album-section"
+              onChange={(event) => setActiveSection(event.target.value)}
+              value={activeSection}
+            >
+              {sections.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.flag} {section.short} — {section.name}
+                </option>
+              ))}
+            </select>
+            {(() => {
+              const section = sections.find((item) => item.id === activeSection)!;
+              const sectionStickers = stickers.filter((sticker) => sticker.section === section.id);
+              const sectionOwned = sectionStickers.filter((sticker) => (quantities[sticker.id] ?? 0) > 0).length;
               return (
-                <button
-                  aria-selected={activeSection === section.id}
-                  className={activeSection === section.id ? 'active' : ''}
-                  key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  role="tab"
-                  type="button"
-                >
+                <div className="selected-section" aria-live="polite">
                   <span className="flag">{section.flag}</span>
-                  <span><b>{section.name}</b><small>{sectionOwned}/8 coladas</small></span>
-                </button>
+                  <span><b>{section.name}</b><small>{sectionOwned} de {sectionStickers.length} coladas</small></span>
+                </div>
               );
-            })}
+            })()}
           </div>
 
           <div className="sticker-grid">

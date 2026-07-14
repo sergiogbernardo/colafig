@@ -97,14 +97,14 @@ nav a:hover, nav a.nav-active { opacity: 1; border-color: var(--lime); }
 .filters { display: flex; padding: 5px; background: #e9e2d8; border-radius: 12px; }
 .filters button { border: 0; background: transparent; padding: 9px 13px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 700; color: #716b63; }
 .filters button.selected { background: var(--paper); color: var(--wine); box-shadow: 0 3px 9px rgba(55,40,30,.1); }
-.section-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 28px; }
-.section-tabs button { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid #ded7cd; background: transparent; border-radius: 14px; text-align: left; cursor: pointer; transition: .2s ease; }
-.section-tabs button:hover { transform: translateY(-2px); }
-.section-tabs button.active { border-color: var(--wine); background: var(--wine); color: white; box-shadow: 0 9px 24px rgba(90,5,39,.18); }
-.section-tabs .flag { width: 45px; height: 36px; display: grid; place-items: center; background: white; border-radius: 8px; font-size: 23px; }
-.section-tabs b, .section-tabs small { display: block; }
-.section-tabs b { font: 700 15px ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; }
-.section-tabs small { margin-top: 2px; font-size: 10px; opacity: .6; }
+.section-picker { margin-bottom: 28px; padding: 16px; border: 1px solid #ded7cd; border-radius: 14px; display: grid; grid-template-columns: minmax(230px, .7fr) 1fr; gap: 7px 20px; align-items: center; background: rgba(255,253,248,.48); }
+.section-picker label { grid-column: 1; color: #797168; font-size: 10px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
+.section-picker select { grid-column: 1; width: 100%; min-height: 44px; padding: 0 40px 0 13px; border: 1px solid #d5cdc1; border-radius: 9px; background: var(--paper); color: var(--ink); font-weight: 700; }
+.selected-section { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 14px; min-width: 0; }
+.selected-section .flag { width: 50px; height: 44px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 10px; background: white; font-size: 25px; box-shadow: 0 3px 10px rgba(55,40,30,.08); }
+.selected-section b, .selected-section small { display: block; }
+.selected-section b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 16px ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; }
+.selected-section small { margin-top: 3px; color: #797168; font-size: 11px; }
 
 .sticker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
 .sticker-card { position: relative; padding: 9px; background: var(--paper); border: 1px solid #e0d9cf; border-radius: 7px; box-shadow: 0 6px 18px rgba(61,44,33,.06); transition: transform .2s ease, box-shadow .2s ease; }
@@ -155,7 +155,9 @@ footer small { color: rgba(255,255,255,.46); font-size: 10px; }
   .summary-strip article { justify-content: flex-start; border-right: 0; border-bottom: 1px solid #e9e3da; padding: 14px 5px; }
   .album-section { padding: 70px 16px 80px; }
   .filters { max-width: 100%; overflow-x: auto; }
-  .section-tabs { grid-template-columns: 1fr; }
+  .section-picker { grid-template-columns: 1fr; }
+  .section-picker label, .section-picker select, .selected-section { grid-column: 1; }
+  .selected-section { grid-row: auto; margin-top: 8px; }
   .sticker-grid { grid-template-columns: repeat(2, 1fr); gap: 11px; }
   .sticker-info { align-items: flex-start; flex-direction: column; }
   footer { grid-template-columns: 1fr; }

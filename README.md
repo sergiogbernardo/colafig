@@ -7,6 +7,10 @@ controlar repetidas, filtrar a caderneta e acompanhar o progresso. A versão
 atual mantém a coleção no navegador; a sincronização por conta será conectada
 ao Supabase na próxima etapa.
 
+O catálogo principal acompanha a estrutura de 980 figurinhas da coleção 2026:
+20 especiais e 20 para cada uma das 48 seleções. O ColaFig usa apenas códigos,
+nomes e elementos visuais próprios; scans e imagens oficiais não são incluídos.
+
 O ColaFig é um projeto independente e não possui vínculo com fabricantes de
 álbuns ou organizações esportivas. A interface usa formas e elementos originais;
 imagens, scans, marcas e layouts oficiais não devem ser adicionados ao repositório.
