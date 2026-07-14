@@ -2,10 +2,12 @@
 
 **Cole, acompanhe, complete.**
 
-Organizador de figurinhas instalável no celular. Permite marcar figurinhas,
-controlar repetidas, filtrar a caderneta e acompanhar o progresso. A versão
-atual mantém a coleção no navegador; a sincronização por conta será conectada
-ao Supabase na próxima etapa.
+Organizador de figurinhas instalável no celular. Permite criar uma conta,
+marcar figurinhas, controlar repetidas, filtrar a caderneta e acompanhar o
+progresso. A caderneta exige uma sessão válida do Supabase Auth. Enquanto o
+catálogo ainda não foi carregado no PostgreSQL, cada coleção é armazenada no
+navegador e isolada pelo ID do usuário; a sincronização entre dispositivos é a
+próxima etapa.
 
 O catálogo principal acompanha a estrutura de 980 figurinhas da coleção 2026:
 20 especiais e 20 para cada uma das 48 seleções. O ColaFig usa apenas códigos,
@@ -32,7 +34,7 @@ npm run dev
 ```
 
 O Vite mostrará o endereço de desenvolvimento. As mudanças da coleção são
-salvas em `localStorage`.
+salvas em uma chave de `localStorage` exclusiva para cada usuário autenticado.
 
 ## Supabase
 
@@ -50,6 +52,10 @@ ou uma connection string.
 A migração inicial está em `supabase/migrations/`. Ela cria o catálogo, os
 perfis e as coleções, ativa RLS em todas as tabelas e aplica políticas de
 propriedade com `auth.uid()`.
+
+O frontend oferece cadastro com confirmação de e-mail, login por e-mail e
+senha, recuperação de senha e encerramento de sessão. A URL de confirmação e
+recuperação deve permanecer autorizada no painel do Supabase Auth.
 
 Antes de aplicar a migração em produção:
 

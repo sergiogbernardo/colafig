@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { initialQuantities, sections, stickers } from './data/album';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
 
 type Filter = 'all' | 'owned' | 'missing' | 'duplicates';
 type ViewMode = 'compact' | 'cards';
+type AuthMode = 'login' | 'signup' | 'forgot' | 'recovery';
 
 const STORAGE_KEY = 'colafig-collection-v1';
 
@@ -14,25 +17,198 @@ function normalizeSearch(value: string) {
     .trim();
 }
 
-function loadCollection() {
+function loadCollection(userId: string) {
   try {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
+    const saved = window.localStorage.getItem(`${STORAGE_KEY}:${userId}`);
     return saved ? (JSON.parse(saved) as Record<string, number>) : initialQuantities;
   } catch {
     return initialQuantities;
   }
 }
 
+function authErrorMessage(mode: AuthMode, code?: string) {
+  if (code === 'weak_password') return 'Use uma senha mais forte, com pelo menos 8 caracteres.';
+  if (code === 'email_not_confirmed') return 'Confirme seu e-mail antes de entrar.';
+  if (code === 'over_email_send_rate_limit') return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+  if (mode === 'login') return 'E-mail ou senha incorretos.';
+  return 'Não foi possível concluir agora. Tente novamente em instantes.';
+}
+
+function PublicLanding({ initialMode = 'login' }: { initialMode?: AuthMode }) {
+  const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [pending, setPending] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (initialMode === 'recovery') setMode('recovery');
+  }, [initialMode]);
+
+  const changeMode = (nextMode: AuthMode) => {
+    setMode(nextMode);
+    setPassword('');
+    setPasswordConfirmation('');
+    setFeedback(null);
+  };
+
+  const submitAuth = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase || pending) return;
+    setPending(true);
+    setFeedback(null);
+
+    try {
+      if (mode === 'forgot') {
+        const redirectTo = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
+        await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+        setFeedback({ type: 'success', text: 'Se existir uma conta com esse e-mail, enviaremos as instruções de recuperação.' });
+        return;
+      }
+
+      if (mode === 'recovery') {
+        if (password.length < 8) {
+          setFeedback({ type: 'error', text: 'A nova senha deve ter pelo menos 8 caracteres.' });
+          return;
+        }
+        if (password !== passwordConfirmation) {
+          setFeedback({ type: 'error', text: 'As senhas não coincidem.' });
+          return;
+        }
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        setFeedback({ type: 'success', text: 'Senha atualizada. Sua caderneta já está liberada.' });
+        return;
+      }
+
+      if (password.length < 8) {
+        setFeedback({ type: 'error', text: 'A senha deve ter pelo menos 8 caracteres.' });
+        return;
+      }
+
+      if (mode === 'signup') {
+        const emailRedirectTo = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo } });
+        if (error) throw error;
+        if (!data.session) {
+          setFeedback({ type: 'success', text: 'Conta criada. Confira seu e-mail para confirmar o cadastro.' });
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+    } catch (error) {
+      const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : undefined;
+      setFeedback({ type: 'error', text: authErrorMessage(mode, code) });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const title = mode === 'signup' ? 'Crie sua conta' : mode === 'forgot' ? 'Recupere sua senha' : mode === 'recovery' ? 'Defina uma nova senha' : 'Entre na sua caderneta';
+  const subtitle = mode === 'signup' ? 'Comece sua coleção em poucos segundos.' : mode === 'forgot' ? 'Enviaremos um link seguro para seu e-mail.' : mode === 'recovery' ? 'Escolha uma senha nova para continuar.' : 'Sua coleção fica protegida e só você pode acessá-la.';
+
+  return (
+    <div className="app-shell public-shell">
+      <header className="topbar public-topbar">
+        <a className="brand" href="#top" aria-label="ColaFig — página inicial"><span className="brand-mark" aria-hidden="true">CF</span><span>ColaFig</span></a>
+        <nav aria-label="Navegação principal"><a href="#como-funciona">Como funciona</a><a href="#entrar">Acessar</a></nav>
+        <a className="profile-button" href="#entrar">Entrar</a>
+      </header>
+      <main id="top">
+        <section className="hero landing-hero">
+          <div className="hero-copy">
+            <span className="eyebrow">Sua coleção, figurinha por figurinha</span>
+            <h1>Cole. Organize.<br /><em>Complete.</em></h1>
+            <p>Controle as figurinhas coladas, descubra o que ainda falta e deixe suas repetidas prontas para troca.</p>
+            <div className="landing-trust"><span>✓ 980 figurinhas</span><span>✓ Acesso protegido</span><span>✓ Feito para celular</span></div>
+          </div>
+          <section className="auth-card" id="entrar" aria-labelledby="auth-title">
+            <span className="auth-kicker">Minha coleção</span>
+            <h2 id="auth-title">{title}</h2>
+            <p>{subtitle}</p>
+            {!isSupabaseConfigured ? (
+              <div className="auth-feedback error">O acesso está temporariamente indisponível. A configuração do serviço não foi encontrada.</div>
+            ) : (
+              <form onSubmit={submitAuth}>
+                {mode !== 'recovery' && (
+                  <label>E-mail<input autoComplete="email" onChange={(event) => setEmail(event.target.value)} placeholder="voce@exemplo.com" required type="email" value={email} /></label>
+                )}
+                {mode !== 'forgot' && (
+                  <label>{mode === 'recovery' ? 'Nova senha' : 'Senha'}<input autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={8} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" required type="password" value={password} /></label>
+                )}
+                {mode === 'recovery' && (
+                  <label>Confirmar nova senha<input autoComplete="new-password" minLength={8} onChange={(event) => setPasswordConfirmation(event.target.value)} required type="password" value={passwordConfirmation} /></label>
+                )}
+                {mode === 'login' && <button className="forgot-link" onClick={() => changeMode('forgot')} type="button">Esqueci minha senha</button>}
+                {feedback && <div className={`auth-feedback ${feedback.type}`} role="status">{feedback.text}</div>}
+                <button className="auth-submit" disabled={pending} type="submit">{pending ? 'Aguarde…' : mode === 'signup' ? 'Criar conta' : mode === 'forgot' ? 'Enviar instruções' : mode === 'recovery' ? 'Salvar nova senha' : 'Entrar'}</button>
+              </form>
+            )}
+            {mode === 'login' && <p className="auth-switch">Ainda não tem conta? <button onClick={() => changeMode('signup')} type="button">Criar conta</button></p>}
+            {mode === 'signup' && <p className="auth-switch">Já tem uma conta? <button onClick={() => changeMode('login')} type="button">Entrar</button></p>}
+            {mode === 'forgot' && <p className="auth-switch"><button onClick={() => changeMode('login')} type="button">← Voltar para o login</button></p>}
+          </section>
+        </section>
+        <section className="landing-features" id="como-funciona" aria-label="Recursos do ColaFig">
+          <article><span className="summary-icon green">✓</span><div><strong>Marque as coladas</strong><p>Atualize a quantidade com um toque.</p></div></article>
+          <article><span className="summary-icon orange">⌕</span><div><strong>Encontre rápido</strong><p>Busque por código, jogador ou seleção.</p></div></article>
+          <article><span className="summary-icon blue">↺</span><div><strong>Separe repetidas</strong><p>Saiba exatamente o que levar para troca.</p></div></article>
+        </section>
+      </main>
+      <footer><a className="brand footer-brand" href="#top"><span className="brand-mark">CF</span><span>ColaFig</span></a><p>Feito para quem vibra a cada figurinha nova.</p><small>Projeto independente — sem vínculo com fabricantes ou organizações esportivas.</small></footer>
+    </div>
+  );
+}
+
 export default function App() {
-  const [quantities, setQuantities] = useState<Record<string, number>>(loadCollection);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [quantities, setQuantities] = useState<Record<string, number>>(initialQuantities);
+  const [collectionOwner, setCollectionOwner] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState(sections[0].id);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('compact');
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(quantities));
-  }, [quantities]);
+    if (!supabase) {
+      setAuthReady(true);
+      return;
+    }
+
+    void supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthReady(true);
+    }).catch(() => setAuthReady(true));
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      setSession(nextSession);
+      setAuthReady(true);
+      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
+      if (event === 'USER_UPDATED') setRecoveryMode(false);
+      if (event === 'SIGNED_OUT') setRecoveryMode(false);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setCollectionOwner(null);
+      setQuantities(initialQuantities);
+      return;
+    }
+    setQuantities(loadCollection(session.user.id));
+    setCollectionOwner(session.user.id);
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || collectionOwner !== session.user.id) return;
+    window.localStorage.setItem(`${STORAGE_KEY}:${session.user.id}`, JSON.stringify(quantities));
+  }, [collectionOwner, quantities, session]);
 
   const owned = stickers.filter((sticker) => (quantities[sticker.id] ?? 0) > 0).length;
   const duplicateCount = stickers.reduce(
@@ -76,6 +252,14 @@ export default function App() {
     document.querySelector('.section-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  if (!authReady) {
+    return <div className="auth-loading"><span className="brand-mark" aria-hidden="true">CF</span><p>Carregando sua coleção…</p></div>;
+  }
+
+  if (!session || recoveryMode) {
+    return <PublicLanding initialMode={recoveryMode ? 'recovery' : 'login'} />;
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -88,7 +272,10 @@ export default function App() {
           <a href="#caderneta">Caderneta</a>
           <a href="#repetidas">Repetidas</a>
         </nav>
-        <a className="profile-button" href="#caderneta">Minha coleção</a>
+        <div className="account-menu">
+          <span title={session.user.email}>{session.user.email}</span>
+          <button onClick={() => void supabase?.auth.signOut()} type="button">Sair</button>
+        </div>
       </header>
 
       <main id="top">
