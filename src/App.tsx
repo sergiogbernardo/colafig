@@ -8,6 +8,7 @@ type ViewMode = 'compact' | 'cards';
 type AuthMode = 'login' | 'signup' | 'forgot' | 'recovery';
 
 const STORAGE_KEY = 'colafig-collection-v1';
+const LAST_PAGE_KEY = 'colafig-last-page-v1';
 
 function normalizeSearch(value: string) {
   return value
@@ -202,6 +203,8 @@ export default function App() {
       return;
     }
     setQuantities(loadCollection(session.user.id));
+    const lastPage = window.localStorage.getItem(`${LAST_PAGE_KEY}:${session.user.id}`);
+    if (lastPage && sections.some((section) => section.id === lastPage)) setActiveSection(lastPage);
     setCollectionOwner(session.user.id);
   }, [session]);
 
@@ -209,6 +212,11 @@ export default function App() {
     if (!session || collectionOwner !== session.user.id) return;
     window.localStorage.setItem(`${STORAGE_KEY}:${session.user.id}`, JSON.stringify(quantities));
   }, [collectionOwner, quantities, session]);
+
+  useEffect(() => {
+    if (!session || collectionOwner !== session.user.id) return;
+    window.localStorage.setItem(`${LAST_PAGE_KEY}:${session.user.id}`, activeSection);
+  }, [activeSection, collectionOwner, session]);
 
   const owned = stickers.filter((sticker) => (quantities[sticker.id] ?? 0) > 0).length;
   const duplicateCount = stickers.reduce(
@@ -249,7 +257,7 @@ export default function App() {
     if (!nextSection) return;
     setActiveSection(nextSection.id);
     setSearch('');
-    document.querySelector('.section-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelector('.organizer-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   if (!authReady) {
@@ -268,9 +276,9 @@ export default function App() {
           <span>ColaFig</span>
         </a>
         <nav aria-label="Navegação principal">
-          <a className="nav-active" href="#resumo">Resumo</a>
-          <a href="#caderneta">Caderneta</a>
-          <a href="#repetidas">Repetidas</a>
+          <a className="nav-active" href="#caderneta">Caderneta</a>
+          <a href="#caderneta" onClick={() => setFilter('missing')}>Faltantes</a>
+          <a href="#caderneta" onClick={() => setFilter('duplicates')}>Repetidas</a>
         </nav>
         <div className="account-menu">
           <span title={session.user.email}>{session.user.email}</span>
@@ -278,86 +286,31 @@ export default function App() {
         </div>
       </header>
 
-      <main id="top">
-        <section className="hero" id="resumo">
-          <div className="hero-copy">
-            <span className="eyebrow">Sua coleção, figurinha por figurinha</span>
-            <h1>Quanto falta para<br /><em>completar?</em></h1>
-            <p>Marque as que você já colou, encontre as faltantes e mantenha as repetidas prontas para troca.</p>
-            <div className="hero-actions">
-              <a className="primary-action" href="#caderneta">Abrir caderneta <span>→</span></a>
-            </div>
+      <main className="authenticated-main" id="top">
+        <section className="collection-overview" aria-label="Resumo da coleção">
+          <div className="overview-heading">
+            <span className="eyebrow dark">Minha caderneta</span>
+            <h1>Organize sua coleção</h1>
+            <p>Continue na página {activeSectionIndex + 1}: <b>{sections[activeSectionIndex].name}</b></p>
           </div>
-          <div className="progress-card" aria-label={`${progress}% do álbum completo`}>
-            <span className="progress-label">Progresso do álbum</span>
-            <strong>{progress}<small>%</small></strong>
+          <div className="overview-progress" aria-label={`${progress}% do álbum completo`}>
+            <div><span>Progresso</span><strong>{progress}%</strong></div>
             <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>
-            <div className="progress-meta">
-              <span><b>{owned}</b> coladas</span>
-              <span><b>{stickers.length - owned}</b> faltantes</span>
-              <span><b>{duplicateCount}</b> repetidas</span>
-            </div>
           </div>
-        </section>
-
-        <section className="summary-strip" aria-label="Resumo da coleção">
-          <article><span className="summary-icon green">✓</span><div><small>Progresso</small><strong>{owned} de {stickers.length}</strong></div></article>
-          <article><span className="summary-icon orange">?</span><div><small>Ainda faltam</small><strong>{stickers.length - owned} figurinhas</strong></div></article>
-          <article id="repetidas"><span className="summary-icon blue">↺</span><div><small>Para trocar</small><strong>{duplicateCount} repetidas</strong></div></article>
+          <div className="overview-stats">
+            <span><i className="green">✓</i><small>Coladas</small><b>{owned}</b></span>
+            <span><i className="orange">?</i><small>Faltantes</small><b>{stickers.length - owned}</b></span>
+            <span id="repetidas"><i className="blue">↺</i><small>Repetidas</small><b>{duplicateCount}</b></span>
+          </div>
         </section>
 
         <section className="album-section" id="caderneta">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow dark">Caderneta</span>
-              <h2>Escolha uma seção</h2>
-            </div>
-            <div className="filters" aria-label="Filtrar figurinhas">
-              {([
-                ['all', 'Todas'],
-                ['owned', 'Coladas'],
-                ['missing', 'Faltantes'],
-                ['duplicates', 'Repetidas'],
-              ] as [Filter, string][]).map(([value, label]) => (
-                <button
-                  className={filter === value ? 'selected' : ''}
-                  key={value}
-                  onClick={() => setFilter(value)}
-                  type="button"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+          <div className="album-heading">
+            <div><span className="eyebrow dark">Caderneta</span><h2>Figurinhas</h2></div>
+            <p>Marque, filtre e encontre qualquer figurinha do álbum.</p>
           </div>
 
-          <div className="section-picker">
-            <label htmlFor="album-section">Página / seção do álbum</label>
-            <select
-              id="album-section"
-              onChange={(event) => setActiveSection(event.target.value)}
-              value={activeSection}
-            >
-              {sections.map((section) => (
-                <option key={section.id} value={section.id}>
-                  {section.flag} {section.short} — {section.name}
-                </option>
-              ))}
-            </select>
-            {(() => {
-              const section = sections.find((item) => item.id === activeSection)!;
-              const sectionStickers = stickers.filter((sticker) => sticker.section === section.id);
-              const sectionOwned = sectionStickers.filter((sticker) => (quantities[sticker.id] ?? 0) > 0).length;
-              return (
-                <div className="selected-section" aria-live="polite">
-                  <span className="flag">{section.flag}</span>
-                  <span><b>{section.name}</b><small>Página {activeSectionIndex + 1} de {sections.length} · {sectionOwned} de {sectionStickers.length} coladas</small></span>
-                </div>
-              );
-            })()}
-          </div>
-
-          <div className="catalog-toolbar">
+          <div className="organizer-toolbar">
             <div className="search-field">
               <label htmlFor="sticker-search">Buscar figurinha</label>
               <div className="search-input">
@@ -373,6 +326,12 @@ export default function App() {
                   <button onClick={() => setSearch('')} type="button" aria-label="Limpar busca">×</button>
                 )}
               </div>
+            </div>
+            <div className="page-field">
+              <label htmlFor="album-section">Página do álbum</label>
+              <select id="album-section" onChange={(event) => setActiveSection(event.target.value)} value={activeSection}>
+                {sections.map((section, index) => <option key={section.id} value={section.id}>{index + 1}. {section.flag} {section.short} — {section.name}</option>)}
+              </select>
             </div>
             <div className="view-options">
               <span>Visualização</span>
@@ -393,9 +352,20 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <p className="results-count" aria-live="polite">
-              <b>{visibleStickers.length}</b> {normalizedSearch ? 'resultados em todo o álbum' : 'figurinhas nesta seção'}
-            </p>
+            <div className="toolbar-lower">
+              {(() => {
+                const section = sections[activeSectionIndex];
+                const sectionStickers = stickers.filter((sticker) => sticker.section === section.id);
+                const sectionOwned = sectionStickers.filter((sticker) => (quantities[sticker.id] ?? 0) > 0).length;
+                return <div className="selected-section" aria-live="polite"><span className="flag">{section.flag}</span><span><b>{section.name}</b><small>Página {activeSectionIndex + 1} de {sections.length} · {sectionOwned}/{sectionStickers.length} coladas</small></span></div>;
+              })()}
+              <div className="filters" aria-label="Filtrar figurinhas">
+                {([['all', 'Todas'], ['owned', 'Coladas'], ['missing', 'Faltantes'], ['duplicates', 'Repetidas']] as [Filter, string][]).map(([value, label]) => (
+                  <button className={filter === value ? 'selected' : ''} key={value} onClick={() => setFilter(value)} type="button">{label}</button>
+                ))}
+              </div>
+              <p className="results-count" aria-live="polite"><b>{visibleStickers.length}</b> {normalizedSearch ? 'resultados no álbum' : 'nesta página'}</p>
+            </div>
           </div>
 
           <div className={viewMode === 'compact' ? 'sticker-list' : 'sticker-grid'}>
