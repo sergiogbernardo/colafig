@@ -290,7 +290,7 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('compact');
-  const [loadedSectionCount, setLoadedSectionCount] = useState(3);
+  const [loadedSectionCount, setLoadedSectionCount] = useState(1);
   const [searchResultLimit, setSearchResultLimit] = useState(60);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -407,7 +407,7 @@ export default function App() {
   const hasMore = visibleStickers.length < availableStickers.length;
 
   useEffect(() => {
-    setLoadedSectionCount(3);
+    setLoadedSectionCount(1);
     setSearchResultLimit(60);
   }, [activeSection, filter, normalizedSearch]);
 
@@ -419,12 +419,21 @@ export default function App() {
       if (normalizedSearch) {
         setSearchResultLimit((current) => Math.min(current + 60, matchingStickers.length));
       } else {
-        setLoadedSectionCount((current) => Math.min(current + 2, sections.length - activeSectionIndex));
+        setLoadedSectionCount((current) => {
+          const maximum = sections.length - activeSectionIndex;
+          let nextCount = Math.min(current + 1, maximum);
+          while (nextCount < maximum) {
+            const nextSection = sections[activeSectionIndex + nextCount - 1];
+            if (matchingStickers.some((sticker) => sticker.section === nextSection.id)) break;
+            nextCount += 1;
+          }
+          return nextCount;
+        });
       }
-    }, { rootMargin: '400px 0px' });
+    }, { rootMargin: '160px 0px' });
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [activeSectionIndex, hasMore, loadedSectionCount, matchingStickers.length, normalizedSearch, searchResultLimit]);
+  }, [activeSectionIndex, hasMore, matchingStickers, normalizedSearch]);
 
   useEffect(() => {
     if (!session || normalizedSearch) return;
@@ -455,7 +464,7 @@ export default function App() {
     setActiveSection(sectionId);
     setVisibleSection(sectionId);
     setSearch('');
-    setLoadedSectionCount(3);
+    setLoadedSectionCount(1);
     window.requestAnimationFrame(() => document.querySelector('.organizer-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
