@@ -2,8 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { initialQuantities, sections, stickers } from './data/album';
 
 type Filter = 'all' | 'owned' | 'missing' | 'duplicates';
+type ViewMode = 'compact' | 'cards';
 
 const STORAGE_KEY = 'colafig-collection-v1';
+
+function normalizeSearch(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim();
+}
 
 function loadCollection() {
   try {
@@ -18,6 +27,8 @@ export default function App() {
   const [quantities, setQuantities] = useState<Record<string, number>>(loadCollection);
   const [activeSection, setActiveSection] = useState(sections[0].id);
   const [filter, setFilter] = useState<Filter>('all');
+  const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('compact');
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(quantities));
@@ -30,20 +41,24 @@ export default function App() {
   );
   const progress = Math.round((owned / stickers.length) * 100);
 
-  const visibleStickers = useMemo(
-    () =>
-      stickers.filter((sticker) => {
+  const normalizedSearch = normalizeSearch(search);
+  const visibleStickers = useMemo(() => {
+    return stickers.filter((sticker) => {
         const quantity = quantities[sticker.id] ?? 0;
-        const matchesSection = sticker.section === activeSection;
+        const section = sections.find((item) => item.id === sticker.section)!;
+        const searchableText = normalizeSearch(
+          `${sticker.number} ${sticker.label} ${section.name} ${section.short}`,
+        );
+        const matchesSection = normalizedSearch.length > 0 || sticker.section === activeSection;
+        const matchesSearch = normalizedSearch.length === 0 || searchableText.includes(normalizedSearch);
         const matchesFilter =
           filter === 'all' ||
           (filter === 'owned' && quantity > 0) ||
           (filter === 'missing' && quantity === 0) ||
           (filter === 'duplicates' && quantity > 1);
-        return matchesSection && matchesFilter;
-      }),
-    [activeSection, filter, quantities],
-  );
+        return matchesSection && matchesSearch && matchesFilter;
+      });
+  }, [activeSection, filter, normalizedSearch, quantities]);
 
   const updateQuantity = (id: string, delta: number) => {
     setQuantities((current) => ({
@@ -146,10 +161,68 @@ export default function App() {
             })()}
           </div>
 
-          <div className="sticker-grid">
+          <div className="catalog-toolbar">
+            <div className="search-field">
+              <label htmlFor="sticker-search">Buscar figurinha</label>
+              <div className="search-input">
+                <span aria-hidden="true">⌕</span>
+                <input
+                  id="sticker-search"
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Código, jogador ou seleção"
+                  type="search"
+                  value={search}
+                />
+                {search && (
+                  <button onClick={() => setSearch('')} type="button" aria-label="Limpar busca">×</button>
+                )}
+              </div>
+            </div>
+            <div className="view-options">
+              <span>Visualização</span>
+              <div className="view-toggle" aria-label="Escolher visualização">
+                <button
+                  className={viewMode === 'compact' ? 'selected' : ''}
+                  onClick={() => setViewMode('compact')}
+                  type="button"
+                >
+                  ☷ <span>Compacta</span>
+                </button>
+                <button
+                  className={viewMode === 'cards' ? 'selected' : ''}
+                  onClick={() => setViewMode('cards')}
+                  type="button"
+                >
+                  ▦ <span>Cards</span>
+                </button>
+              </div>
+            </div>
+            <p className="results-count" aria-live="polite">
+              <b>{visibleStickers.length}</b> {normalizedSearch ? 'resultados em todo o álbum' : 'figurinhas nesta seção'}
+            </p>
+          </div>
+
+          <div className={viewMode === 'compact' ? 'sticker-list' : 'sticker-grid'}>
             {visibleStickers.map((sticker) => {
               const quantity = quantities[sticker.id] ?? 0;
               const section = sections.find((item) => item.id === sticker.section)!;
+              if (viewMode === 'compact') {
+                return (
+                  <article className={`compact-sticker ${quantity > 0 ? 'owned' : 'missing'}`} key={sticker.id}>
+                    <span className="compact-code">{sticker.number}</span>
+                    <div className="compact-copy">
+                      <strong>{sticker.label}</strong>
+                      <small>{section.flag} {section.short} · {section.name}</small>
+                    </div>
+                    {quantity > 1 && <span className="compact-duplicate">+{quantity - 1}</span>}
+                    <div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}>
+                      <button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button>
+                      <b>{quantity}</b>
+                      <button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button>
+                    </div>
+                  </article>
+                );
+              }
               return (
                 <article className={`sticker-card ${quantity > 0 ? 'owned' : 'missing'}`} key={sticker.id}>
                   {quantity > 1 && <span className="duplicate-badge">+{quantity - 1}</span>}
@@ -170,7 +243,9 @@ export default function App() {
               );
             })}
             {visibleStickers.length === 0 && (
-              <div className="empty-state">Nenhuma figurinha desta seleção corresponde ao filtro.</div>
+              <div className="empty-state">
+                {normalizedSearch ? 'Nenhuma figurinha encontrada para esta busca.' : 'Nenhuma figurinha desta seleção corresponde ao filtro.'}
+              </div>
             )}
           </div>
         </section>
