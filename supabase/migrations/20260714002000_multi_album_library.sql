@@ -9,13 +9,18 @@ alter table public.albums
   add column if not exists accent_color text;
 
 alter table public.albums
+  drop constraint if exists albums_category_length,
+  drop constraint if exists albums_publisher_length,
+  drop constraint if exists albums_edition_length,
+  drop constraint if exists albums_description_length,
+  drop constraint if exists albums_accent_color_format,
   add constraint albums_category_length check (category is null or char_length(category) between 1 and 60),
   add constraint albums_publisher_length check (publisher is null or char_length(publisher) between 1 and 100),
   add constraint albums_edition_length check (edition is null or char_length(edition) between 1 and 100),
   add constraint albums_description_length check (description is null or char_length(description) between 1 and 500),
   add constraint albums_accent_color_format check (accent_color is null or accent_color ~ '^#[0-9a-fA-F]{6}$');
 
-create table public.user_albums (
+create table if not exists public.user_albums (
   user_id uuid not null references auth.users(id) on delete cascade,
   album_id uuid not null references public.albums(id) on delete cascade,
   last_section_id uuid references public.sections(id) on delete set null,
@@ -27,10 +32,16 @@ create table public.user_albums (
   check (completed_at is null or completed_at >= added_at)
 );
 
-create index user_albums_user_id_idx on public.user_albums(user_id);
+create index if not exists user_albums_user_id_idx on public.user_albums(user_id);
 alter table public.user_albums enable row level security;
 revoke all on table public.user_albums from anon, authenticated;
 grant select, insert, update, delete on table public.user_albums to authenticated;
+
+drop policy if exists "users read their own album library" on public.user_albums;
+drop policy if exists "users add published albums to their own library" on public.user_albums;
+drop policy if exists "users update their own album library" on public.user_albums;
+drop policy if exists "users remove albums from their own library" on public.user_albums;
+drop policy if exists "users remove albums from their own album library" on public.user_albums;
 
 create policy "users read their own album library"
   on public.user_albums for select
@@ -87,6 +98,9 @@ create policy "users remove albums from their own library"
 drop policy if exists "catalogue albums are readable" on public.albums;
 drop policy if exists "catalogue sections are readable" on public.sections;
 drop policy if exists "catalogue stickers are readable" on public.stickers;
+drop policy if exists "published catalogue albums are readable" on public.albums;
+drop policy if exists "published catalogue sections are readable" on public.sections;
+drop policy if exists "published catalogue stickers are readable" on public.stickers;
 
 create policy "published catalogue albums are readable"
   on public.albums for select

@@ -10,7 +10,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --pretty false"
+    "typecheck": "tsc -b --pretty false",
+    "generate:catalog": "node scripts/generate-catalog-migration.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

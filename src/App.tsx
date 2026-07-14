@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { albumCatalog, initialQuantities, sections, stickers } from './data/album';
+import { loadRemoteCollection, migrateCollection, saveStickerQuantity, saveUserAlbum } from './lib/collectionRepository';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 
 type Filter = 'all' | 'owned' | 'missing' | 'duplicates';
@@ -14,6 +15,9 @@ const LAST_PAGE_KEY = 'colafig-last-page-v1';
 const USER_ALBUMS_KEY = 'colafig-user-albums-v1';
 const COOKIE_NOTICE_KEY = 'colafig-cookie-notice-v1';
 const AUTH_RETURN_MODE_KEY = 'colafig-auth-return-mode';
+const SYNC_MIGRATED_KEY = 'colafig-supabase-migrated-v1';
+const PENDING_QUANTITIES_KEY = 'colafig-pending-quantities-v1';
+const PENDING_ALBUMS_KEY = 'colafig-pending-albums-v1';
 
 const legalHashes: Record<LegalPage, string> = {
   privacy: '#/privacidade',
@@ -51,6 +55,48 @@ function loadUserAlbums(userId: string, hasLegacyCollection: boolean) {
   } catch {
     return hasLegacyCollection ? [albumCatalog[0].slug] : [];
   }
+}
+
+function loadPendingQuantities(userId: string) {
+  try {
+    const saved = window.localStorage.getItem(`${PENDING_QUANTITIES_KEY}:${userId}`);
+    return saved ? JSON.parse(saved) as Record<string, number> : {};
+  } catch {
+    return {};
+  }
+}
+
+function savePendingQuantity(userId: string, stickerId: string, quantity: number) {
+  const pending = loadPendingQuantities(userId);
+  pending[stickerId] = quantity;
+  window.localStorage.setItem(`${PENDING_QUANTITIES_KEY}:${userId}`, JSON.stringify(pending));
+}
+
+function clearPendingQuantity(userId: string, stickerId: string, quantity: number) {
+  const pending = loadPendingQuantities(userId);
+  if (pending[stickerId] !== quantity) return;
+  delete pending[stickerId];
+  window.localStorage.setItem(`${PENDING_QUANTITIES_KEY}:${userId}`, JSON.stringify(pending));
+}
+
+function loadPendingAlbums(userId: string) {
+  try {
+    const saved = window.localStorage.getItem(`${PENDING_ALBUMS_KEY}:${userId}`);
+    return saved ? JSON.parse(saved) as string[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePendingAlbum(userId: string, slug: string) {
+  const pending = loadPendingAlbums(userId);
+  if (!pending.includes(slug)) pending.push(slug);
+  window.localStorage.setItem(`${PENDING_ALBUMS_KEY}:${userId}`, JSON.stringify(pending));
+}
+
+function clearPendingAlbum(userId: string, slug: string) {
+  const pending = loadPendingAlbums(userId).filter((item) => item !== slug);
+  window.localStorage.setItem(`${PENDING_ALBUMS_KEY}:${userId}`, JSON.stringify(pending));
 }
 
 function authErrorMessage(mode: AuthMode, code?: string) {
@@ -289,6 +335,9 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('compact');
+  const [remoteStickerIds, setRemoteStickerIds] = useState<Record<string, string>>({});
+  const [remoteAlbumIds, setRemoteAlbumIds] = useState<Record<string, string>>({});
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
     if (!supabase) {
@@ -325,17 +374,78 @@ export default function App() {
       setUserAlbums([]);
       setAppView('library');
       setQuantities(initialQuantities);
+      setRemoteStickerIds({});
+      setRemoteAlbumIds({});
+      setSyncStatus('idle');
       return;
     }
-    const hasLegacyCollection = window.localStorage.getItem(`${STORAGE_KEY}:${session.user.id}`) !== null;
-    setQuantities(loadCollection(session.user.id));
-    setUserAlbums(loadUserAlbums(session.user.id, hasLegacyCollection));
-    const lastPage = window.localStorage.getItem(`${LAST_PAGE_KEY}:${session.user.id}`);
+    const userId = session.user.id;
+    const hasLegacyCollection = window.localStorage.getItem(`${STORAGE_KEY}:${userId}`) !== null;
+    const localQuantities = loadCollection(userId);
+    const localAlbums = loadUserAlbums(userId, hasLegacyCollection);
+    setQuantities(localQuantities);
+    setUserAlbums(localAlbums);
+    const lastPage = window.localStorage.getItem(`${LAST_PAGE_KEY}:${userId}`);
     if (lastPage && sections.some((section) => section.id === lastPage)) {
       setActiveSection(lastPage);
     }
-    setCollectionOwner(session.user.id);
-    setLibraryOwner(session.user.id);
+    setCollectionOwner(userId);
+    setLibraryOwner(userId);
+
+    let cancelled = false;
+    const hydrateFromSupabase = async () => {
+      setSyncStatus('syncing');
+      try {
+        const remote = await loadRemoteCollection(userId);
+        const albumSlug = albumCatalog[0].slug;
+        const prefix = `${albumSlug}:`;
+        const localIdsByCode = Object.fromEntries(stickers.map((sticker) => [sticker.number, sticker.id]));
+        const stickerIdsByLocalId: Record<string, string> = Object.fromEntries(
+          Object.entries(remote.stickerIdsByKey)
+            .filter(([key]) => key.startsWith(prefix))
+            .map(([key, stickerId]) => [localIdsByCode[key.slice(prefix.length)], stickerId])
+            .filter(([localId]) => Boolean(localId)),
+        );
+        const remoteQuantities: Record<string, number> = Object.fromEntries(
+          Object.entries(remote.quantitiesByKey)
+            .filter(([key]) => key.startsWith(prefix))
+            .map(([key, quantity]) => [localIdsByCode[key.slice(prefix.length)], quantity])
+            .filter(([localId]) => Boolean(localId)),
+        );
+        const pendingQuantities = loadPendingQuantities(userId);
+        const wasMigrated = window.localStorage.getItem(`${SYNC_MIGRATED_KEY}:${userId}`) === 'true';
+        const mergedQuantities = {
+          ...remoteQuantities,
+          ...(!wasMigrated ? localQuantities : {}),
+          ...pendingQuantities,
+        };
+        const pendingAlbums = loadPendingAlbums(userId);
+        const mergedAlbums = [...new Set([...remote.userAlbums, ...localAlbums, ...pendingAlbums])];
+        const albumsToSave = mergedAlbums
+          .map((slug) => remote.albumIdsBySlug[slug])
+          .filter(Boolean)
+          .map((albumId) => ({ albumId }));
+        const quantitiesToSave = (!wasMigrated ? Object.entries(mergedQuantities) : Object.entries(pendingQuantities))
+          .map(([localId, quantity]) => ({ quantity, stickerId: stickerIdsByLocalId[localId] }))
+          .filter((item) => Boolean(item.stickerId));
+
+        await migrateCollection(userId, albumsToSave, quantitiesToSave);
+        window.localStorage.setItem(`${SYNC_MIGRATED_KEY}:${userId}`, 'true');
+        Object.entries(pendingQuantities).forEach(([localId, quantity]) => clearPendingQuantity(userId, localId, quantity));
+        pendingAlbums.forEach((slug) => clearPendingAlbum(userId, slug));
+        if (cancelled) return;
+        setRemoteStickerIds(stickerIdsByLocalId);
+        setRemoteAlbumIds(remote.albumIdsBySlug);
+        setQuantities(mergedQuantities);
+        setUserAlbums(mergedAlbums);
+        setSyncStatus('saved');
+      } catch (error) {
+        console.error('Não foi possível sincronizar a coleção com o Supabase.', error);
+        if (!cancelled) setSyncStatus('error');
+      }
+    };
+    void hydrateFromSupabase();
+    return () => { cancelled = true; };
   }, [session]);
 
   useEffect(() => {
@@ -395,10 +505,25 @@ export default function App() {
   );
 
   const updateQuantity = (id: string, delta: number) => {
-    setQuantities((current) => ({
-      ...current,
-      [id]: Math.max(0, Math.min(9, (current[id] ?? 0) + delta)),
-    }));
+    const quantity = Math.max(0, Math.min(9, (quantities[id] ?? 0) + delta));
+    setQuantities((current) => ({ ...current, [id]: quantity }));
+    if (!session) return;
+    savePendingQuantity(session.user.id, id, quantity);
+    const remoteStickerId = remoteStickerIds[id];
+    if (!remoteStickerId) {
+      setSyncStatus('error');
+      return;
+    }
+    setSyncStatus('syncing');
+    void saveStickerQuantity(session.user.id, remoteStickerId, quantity)
+      .then(() => {
+        clearPendingQuantity(session.user.id, id, quantity);
+        setSyncStatus('saved');
+      })
+      .catch((error) => {
+        console.error('Não foi possível salvar a figurinha.', error);
+        setSyncStatus('error');
+      });
   };
 
   const jumpToSection = (sectionId: string) => {
@@ -421,6 +546,22 @@ export default function App() {
 
   const addAlbum = (slug: string) => {
     setUserAlbums((current) => current.includes(slug) ? current : [...current, slug]);
+    if (session) {
+      savePendingAlbum(session.user.id, slug);
+      const remoteAlbumId = remoteAlbumIds[slug];
+      if (remoteAlbumId) {
+        setSyncStatus('syncing');
+        void saveUserAlbum(session.user.id, remoteAlbumId)
+          .then(() => {
+            clearPendingAlbum(session.user.id, slug);
+            setSyncStatus('saved');
+          })
+          .catch((error) => {
+            console.error('Não foi possível salvar o álbum.', error);
+            setSyncStatus('error');
+          });
+      }
+    }
     openAlbum(slug);
   };
 
@@ -465,6 +606,7 @@ export default function App() {
           <button className={appView === 'catalog' ? 'nav-active' : ''} onClick={() => setAppView('catalog')} type="button">Catálogo</button>
         </nav>
         <div className="account-menu">
+          <i className={`sync-status ${syncStatus}`} title={syncStatus === 'error' ? 'Alterações guardadas neste dispositivo; tentaremos sincronizar novamente.' : syncStatus === 'syncing' ? 'Sincronizando coleção' : 'Coleção sincronizada'}>{syncStatus === 'error' ? 'Local' : syncStatus === 'syncing' ? 'Salvando…' : 'Salvo'}</i>
           <span title={session.user.email}>{session.user.email}</span>
           <button onClick={() => void supabase?.auth.signOut()} type="button">Sair</button>
         </div>
