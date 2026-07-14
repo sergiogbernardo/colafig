@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { FriendsPage } from './components/FriendsPage';
+import { TradeComparison } from './components/TradeComparison';
 import { albumCatalog, initialQuantities, sections, stickers } from './data/album';
 import { loadRemoteCollection, migrateCollection, saveStickerQuantity, saveUserAlbum, type RemoteCollectionState } from './lib/collectionRepository';
 import type { PublicProfile } from './lib/socialRepository';
@@ -743,6 +744,8 @@ export default function App() {
         </section>
 
         {viewedFriend && <aside className={`friend-view-banner ${friendHasActiveAlbum ? '' : 'empty'}`}><span>◎</span><div><b>{friendHasActiveAlbum ? `Você está vendo o álbum de ${viewedFriend.profile.displayName || `@${viewedFriend.profile.username}`}` : `${viewedFriend.profile.displayName || `@${viewedFriend.profile.username}`} ainda não adicionou este álbum`}</b><p>{friendHasActiveAlbum ? 'Use os filtros para encontrar faltantes e repetidas. Nenhuma alteração pode ser feita aqui.' : 'Quando essa pessoa iniciar a coleção, o progresso aparecerá automaticamente.'}</p></div><button onClick={() => navigateTo('friends')} type="button">← Voltar aos amigos</button></aside>}
+
+        {viewedFriend && friendHasActiveAlbum && <TradeComparison friendName={viewedFriend.profile.displayName || `@${viewedFriend.profile.username}`} friendQuantities={viewedFriend.quantities} ownQuantities={quantities} />}
 
         <section className="album-section" id="caderneta">
           <nav className="collection-view-nav" aria-label="Visões da coleção">
