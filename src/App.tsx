@@ -411,9 +411,9 @@ export default function App() {
                 if (!album) return null;
                 return (
                   <article className="user-album-card" key={album.slug}>
-                    <div className="album-cover" style={{ '--album-accent': album.accent } as React.CSSProperties}><span>COLEÇÃO</span><strong>{album.year}</strong><b>{album.shortName}</b></div>
+                    <div className="album-cover" style={{ '--album-accent': album.accent } as React.CSSProperties}><span>COLAFIG</span><div className="album-cover-emblem" aria-hidden="true">CF</div><b>{album.category}</b></div>
                     <div className="album-card-content">
-                      <span className="album-category">{album.category} · {album.year}</span>
+                      <span className="album-category">{album.category}</span>
                       <h2>{album.name}</h2>
                       <p>{owned} de {album.stickerCount} figurinhas</p>
                       <div className="album-card-progress"><span style={{ width: `${progress}%` }} /></div>
@@ -444,7 +444,7 @@ export default function App() {
               const added = userAlbums.includes(album.slug);
               return (
                 <article className="catalog-card" key={album.slug}>
-                  <div className="catalog-cover album-cover" style={{ '--album-accent': album.accent } as React.CSSProperties}><span>COLAFIG</span><strong>{album.year}</strong><b>{album.shortName}</b></div>
+                  <div className="catalog-cover album-cover" style={{ '--album-accent': album.accent } as React.CSSProperties}><span>COLAFIG</span><div className="album-cover-emblem" aria-hidden="true">CF</div><b>{album.category}</b></div>
                   <div className="catalog-card-copy"><span className="album-category">{album.category} · {album.sectionCount} seções</span><h2>{album.name}</h2><p>{album.description}</p><small>{album.stickerCount} figurinhas</small><button className={added ? 'added' : ''} onClick={() => added ? openAlbum(album.slug) : addAlbum(album.slug)} type="button">{added ? 'Abrir caderneta' : 'Adicionar à coleção'} <span>{added ? '→' : '＋'}</span></button></div>
                 </article>
               );

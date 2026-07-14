@@ -145,7 +145,7 @@ a { color: inherit; text-decoration: none; }
 .album-cover::after { width: 180px; height: 100px; left: -65px; bottom: 35px; border: 35px solid var(--lime); transform: rotate(22deg); opacity: .9; }
 .album-cover > * { position: relative; z-index: 1; }
 .album-cover > span { color: var(--lime); font-size: 9px; font-weight: 850; letter-spacing: 1.7px; }
-.album-cover > strong { align-self: center; font: 850 clamp(57px, 7vw, 88px)/.9 ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; letter-spacing: -7px; }
+.album-cover-emblem { width: 82px; height: 82px; align-self: center; display: grid; place-items: center; border-radius: 26px 8px 26px 8px; background: var(--lime); color: var(--wine-dark); font: 900 27px ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; letter-spacing: -2px; transform: rotate(-4deg); box-shadow: 0 15px 28px rgba(45,0,20,.2); }
 .album-cover > b { font: 800 18px ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; }
 .album-card-content { padding: 28px 25px; display: flex; flex-direction: column; justify-content: center; }
 .album-category { color: var(--wine); font-size: 9px; font-weight: 850; letter-spacing: 1px; text-transform: uppercase; }
@@ -327,7 +327,7 @@ footer small { color: rgba(255,255,255,.46); font-size: 10px; }
   .hub-primary { width: 100%; justify-content: center; }
   .user-album-card, .catalog-card { grid-template-columns: 1fr; }
   .album-cover, .catalog-cover { min-height: 215px; }
-  .album-cover > strong { font-size: 68px; }
+  .album-cover-emblem { width: 72px; height: 72px; }
   .album-card-content, .catalog-card-copy { padding: 24px 20px; }
   .catalog-tools { align-items: stretch; flex-direction: column; }
   .catalog-categories { overflow-x: auto; }
