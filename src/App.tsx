@@ -65,7 +65,7 @@ function SiteFooter({ onOpenLegal }: { onOpenLegal: (page: LegalPage) => void })
   return (
     <footer className="site-footer">
       <a className="brand footer-brand" href="#top"><span className="brand-mark">CF</span><span>ColaFig</span></a>
-      <p>© 2026 ColaFig · Desenvolvido por <a href="https://github.com/sergiogbernardo" rel="noreferrer" target="_blank">Sergio Bernardo</a></p>
+      <p>© 2026 ColaFig · Desenvolvido por <a href="https://sabion.io" rel="noreferrer" target="_blank">Sergio Bernardo</a></p>
       <nav aria-label="Links legais"><button onClick={() => onOpenLegal('privacy')} type="button">Privacidade</button><button onClick={() => onOpenLegal('cookies')} type="button">Cookies</button><button onClick={() => onOpenLegal('terms')} type="button">Termos de uso</button></nav>
     </footer>
   );
