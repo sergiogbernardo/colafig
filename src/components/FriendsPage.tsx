@@ -89,9 +89,10 @@ export function FriendsPage({ onOpenCollection, userId }: { onOpenCollection: (p
     setFeedback(null);
     setBusyId('search');
     try {
-      setResults(await searchProfiles(userId, search));
-    } catch {
-      setFeedback({ kind: 'error', text: 'Não foi possível buscar pessoas agora.' });
+      setResults(await searchProfiles(search));
+    } catch (error) {
+      const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+      setFeedback({ kind: 'error', text: code === 'P0001' ? 'Muitas buscas em pouco tempo. Aguarde alguns minutos e tente novamente.' : 'Não foi possível buscar pessoas agora.' });
     } finally {
       setBusyId(null);
     }
@@ -106,7 +107,7 @@ export function FriendsPage({ onOpenCollection, userId }: { onOpenCollection: (p
       setFeedback({ kind: 'success', text: success });
     } catch (error) {
       const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
-      setFeedback({ kind: 'error', text: code === '23505' ? 'Já existe um convite ou amizade com essa pessoa.' : 'Não foi possível concluir essa ação.' });
+      setFeedback({ kind: 'error', text: code === '23505' ? 'Já existe um convite ou amizade com essa pessoa.' : code === 'P0001' ? 'Limite de convites atingido ou convite enviado recentemente. Tente novamente mais tarde.' : 'Não foi possível concluir essa ação.' });
     } finally {
       setBusyId(null);
     }
@@ -147,7 +148,7 @@ export function FriendsPage({ onOpenCollection, userId }: { onOpenCollection: (p
           <form onSubmit={submitSearch}><div className="search-input"><span aria-hidden="true">⌕</span><input onChange={(event) => setSearch(event.target.value)} placeholder="Buscar @usuario" type="search" value={search} /><button disabled={busyId === 'search' || search.trim().length < 3} type="submit">Buscar</button></div></form>
           {results.length > 0 && <div className="people-results">{results.map((profile) => {
             const related = relatedIds.has(profile.id);
-            return <article key={profile.id}><ProfileBadge profile={profile} /><div><b>{profileName(profile)}</b><span>@{profile.username}</span></div><button disabled={related || busyId === profile.id} onClick={() => void runAction(profile.id, () => sendFriendRequest(userId, profile.id), 'Convite enviado.')} type="button">{related ? 'Já conectado' : 'Adicionar'}</button></article>;
+            return <article key={profile.id}><ProfileBadge profile={profile} /><div><b>{profileName(profile)}</b><span>@{profile.username}</span></div><button disabled={related || busyId === profile.id} onClick={() => void runAction(profile.id, () => sendFriendRequest(profile.id), 'Convite enviado.')} type="button">{related ? 'Já conectado' : 'Adicionar'}</button></article>;
           })}</div>}
           {results.length === 0 && search && busyId !== 'search' && <p className="search-hint">Nenhum resultado nesta busca.</p>}
         </section>

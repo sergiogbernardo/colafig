@@ -6,7 +6,8 @@ import { loadRemoteCollection, migrateCollection, saveStickerQuantity, saveUserA
 import type { PublicProfile } from './lib/socialRepository';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 
-type Filter = 'all' | 'owned' | 'missing' | 'duplicates';
+type Filter = 'all' | 'owned';
+type CollectionView = 'album' | 'missing' | 'duplicates';
 type ViewMode = 'compact' | 'cards';
 type AuthMode = 'login' | 'signup' | 'forgot' | 'recovery';
 type AppView = 'library' | 'catalog' | 'friends' | 'album';
@@ -353,6 +354,7 @@ export default function App() {
   const [legalPage, setLegalPage] = useState<LegalPage | null>(legalPageFromHash);
   const [activeSection, setActiveSection] = useState(sections[0].id);
   const [filter, setFilter] = useState<Filter>('all');
+  const [collectionView, setCollectionView] = useState<CollectionView>('album');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('compact');
   const [remoteStickerIds, setRemoteStickerIds] = useState<Record<string, string>>({});
@@ -490,22 +492,24 @@ export default function App() {
           `${sticker.number} ${sticker.label} ${section.name} ${section.short}`,
         );
         const matchesSearch = normalizedSearch.length === 0 || searchableText.includes(normalizedSearch);
-        const matchesFilter =
-          filter === 'all' ||
-          (filter === 'owned' && quantity > 0) ||
-          (filter === 'missing' && quantity === 0) ||
-          (filter === 'duplicates' && quantity > 1);
-        return matchesSearch && matchesFilter;
+        const matchesCollectionView =
+          collectionView === 'album' ||
+          (collectionView === 'missing' && quantity === 0) ||
+          (collectionView === 'duplicates' && quantity > 1);
+        const matchesFilter = filter === 'all' || quantity > 0;
+        return matchesSearch && matchesCollectionView && matchesFilter;
       });
-  }, [activeQuantities, filter, normalizedSearch]);
+  }, [activeQuantities, collectionView, filter, normalizedSearch]);
 
   const displayedSections = useMemo(
-    () => normalizedSearch ? sections : [sections[activeSectionIndex]],
-    [activeSectionIndex, normalizedSearch],
+    () => normalizedSearch || collectionView !== 'album' ? sections : [sections[activeSectionIndex]],
+    [activeSectionIndex, collectionView, normalizedSearch],
   );
   const visibleStickers = useMemo(
-    () => normalizedSearch ? matchingStickers : matchingStickers.filter((sticker) => sticker.section === activeSection),
-    [activeSection, matchingStickers, normalizedSearch],
+    () => normalizedSearch || collectionView !== 'album'
+      ? matchingStickers
+      : matchingStickers.filter((sticker) => sticker.section === activeSection),
+    [activeSection, collectionView, matchingStickers, normalizedSearch],
   );
   const stickerGroups = useMemo(
     () => displayedSections
@@ -538,9 +542,17 @@ export default function App() {
   };
 
   const jumpToSection = (sectionId: string) => {
+    setCollectionView('album');
     setActiveSection(sectionId);
     setSearch('');
     window.requestAnimationFrame(() => document.querySelector('.organizer-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
+
+  const openCollectionView = (nextView: CollectionView) => {
+    setCollectionView(nextView);
+    setFilter('all');
+    setSearch('');
+    window.requestAnimationFrame(() => document.querySelector('.album-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
   const goToAlbumPage = (index: number) => {
@@ -726,20 +738,25 @@ export default function App() {
           </div>
           <div className="overview-stats">
             <span><i className="green">✓</i><small>Coladas</small><b>{owned}</b></span>
-            <span><i className="orange">?</i><small>Faltantes</small><b>{stickers.length - owned}</b></span>
-            <span id="repetidas"><i className="blue">↺</i><small>Repetidas</small><b>{duplicateCount}</b></span>
+            <button className={collectionView === 'missing' ? 'selected' : ''} onClick={() => openCollectionView('missing')} type="button"><i className="orange">?</i><small>Faltantes</small><b>{stickers.length - owned}</b></button>
+            <button className={collectionView === 'duplicates' ? 'selected' : ''} id="repetidas" onClick={() => openCollectionView('duplicates')} type="button"><i className="blue">↺</i><small>Repetidas</small><b>{duplicateCount}</b></button>
           </div>
         </section>
 
         {viewedFriend && <aside className={`friend-view-banner ${friendHasActiveAlbum ? '' : 'empty'}`}><span>◎</span><div><b>{friendHasActiveAlbum ? `Você está vendo o álbum de ${viewedFriend.profile.displayName || `@${viewedFriend.profile.username}`}` : `${viewedFriend.profile.displayName || `@${viewedFriend.profile.username}`} ainda não adicionou este álbum`}</b><p>{friendHasActiveAlbum ? 'Use os filtros para encontrar faltantes e repetidas. Nenhuma alteração pode ser feita aqui.' : 'Quando essa pessoa iniciar a coleção, o progresso aparecerá automaticamente.'}</p></div><button onClick={() => navigateTo('friends')} type="button">← Voltar aos amigos</button></aside>}
 
         <section className="album-section" id="caderneta">
+          <nav className="collection-view-nav" aria-label="Visões da coleção">
+            <button className={collectionView === 'album' ? 'selected' : ''} onClick={() => openCollectionView('album')} type="button"><span className="collection-view-icon">▤</span><span><b>Caderneta</b><small>Navegar página por página</small></span></button>
+            <button className={collectionView === 'missing' ? 'selected missing' : 'missing'} onClick={() => openCollectionView('missing')} type="button"><span className="collection-view-icon">?</span><span><b>Faltantes</b><small>{stickers.length - owned} para completar</small></span></button>
+            <button className={collectionView === 'duplicates' ? 'selected duplicates' : 'duplicates'} onClick={() => openCollectionView('duplicates')} type="button"><span className="collection-view-icon">↺</span><span><b>Repetidas</b><small>{duplicateCount} disponíveis para troca</small></span></button>
+          </nav>
           <div className="album-heading">
-            <div><span className="eyebrow dark">Caderneta</span><h2>Figurinhas</h2></div>
-            <p>{viewedFriend ? 'Filtre e consulte as figurinhas desta coleção.' : 'Marque, filtre e encontre qualquer figurinha do álbum.'}</p>
+            <div><span className="eyebrow dark">{collectionView === 'album' ? 'Caderneta' : 'Lista da coleção'}</span><h2>{collectionView === 'missing' ? 'Faltantes' : collectionView === 'duplicates' ? 'Repetidas' : 'Figurinhas'}</h2></div>
+            <p>{collectionView === 'missing' ? 'Todas as figurinhas que ainda faltam, reunidas por seleção.' : collectionView === 'duplicates' ? 'Todas as cópias extras prontas para troca, sem procurar página por página.' : viewedFriend ? 'Consulte as figurinhas desta coleção.' : 'Marque e encontre qualquer figurinha do álbum.'}</p>
           </div>
 
-          <div className="organizer-toolbar">
+          <div className={`organizer-toolbar ${collectionView !== 'album' ? 'global-view' : ''}`}>
             <div className="search-field">
               <label htmlFor="sticker-search">Buscar figurinha</label>
               <div className="search-input">
@@ -756,12 +773,12 @@ export default function App() {
                 )}
               </div>
             </div>
-            <div className="page-field">
+            {collectionView === 'album' && <div className="page-field">
               <label htmlFor="album-section">Ir para seção</label>
               <select id="album-section" onChange={(event) => jumpToSection(event.target.value)} value={activeSection}>
                 {sections.map((section, index) => <option key={section.id} value={section.id}>{index + 1}. {section.flag} {section.short} — {section.name}</option>)}
               </select>
-            </div>
+            </div>}
             <div className="view-options">
               <span>Visualização</span>
               <div className="view-toggle" aria-label="Escolher visualização">
@@ -782,13 +799,13 @@ export default function App() {
               </div>
             </div>
             <div className="toolbar-lower">
-              <div className="filters" aria-label="Filtrar figurinhas">
-                {([['all', 'Todas'], ['owned', 'Coladas'], ['missing', 'Faltantes'], ['duplicates', 'Repetidas']] as [Filter, string][]).map(([value, label]) => (
+              {collectionView === 'album' ? <div className="filters" aria-label="Filtrar figurinhas">
+                {([['all', 'Todas'], ['owned', 'Coladas']] as [Filter, string][]).map(([value, label]) => (
                   <button className={filter === value ? 'selected' : ''} key={value} onClick={() => setFilter(value)} type="button">{label}</button>
                 ))}
-              </div>
+              </div> : <div className={`global-view-summary ${collectionView}`}><span>{collectionView === 'missing' ? '?' : '↺'}</span><b>{collectionView === 'missing' ? `${visibleStickers.length} figurinhas faltando` : `${duplicateCount} cópias extras em ${visibleStickers.length} figurinhas`}</b></div>}
               <p className="results-count" aria-live="polite">
-                {normalizedSearch ? <><b>{visibleStickers.length}</b> resultados no álbum</> : <><b>{visibleStickers.length}</b> nesta página</>}
+                {normalizedSearch ? <><b>{visibleStickers.length}</b> resultados</> : collectionView === 'album' ? <><b>{visibleStickers.length}</b> nesta página</> : <><b>{stickerGroups.length}</b> seleções</>}
               </p>
             </div>
           </div>
@@ -797,12 +814,19 @@ export default function App() {
             {stickerGroups.map(({ section, items }) => {
               const sectionIndex = sections.findIndex((item) => item.id === section.id);
               const sectionOwned = stickers.filter((sticker) => sticker.section === section.id && (activeQuantities[sticker.id] ?? 0) > 0).length;
+              const sectionTotal = stickers.filter((sticker) => sticker.section === section.id).length;
+              const sectionDuplicates = stickers.reduce((total, sticker) => sticker.section === section.id ? total + Math.max((activeQuantities[sticker.id] ?? 0) - 1, 0) : total, 0);
+              const sectionSummary = collectionView === 'missing'
+                ? `${sectionTotal - sectionOwned} faltantes`
+                : collectionView === 'duplicates'
+                  ? `${sectionDuplicates} cópias extras`
+                  : `${sectionOwned}/${sectionTotal} coladas`;
               return (
                 <section className="sticker-section-group" data-section-id={section.id} key={section.id} aria-labelledby={`section-${section.id}`}>
                   <header className="section-divider" id={`section-${section.id}`}>
                     <span className="section-number">{sectionIndex + 1}</span>
                     <span className="section-flag">{section.flag}</span>
-                    <span><b>{section.name}</b><small>{section.short} · {sectionOwned}/20 coladas</small></span>
+                    <span><b>{section.name}</b><small>{section.short} · {sectionSummary}</small></span>
                   </header>
                   <div className={viewMode === 'compact' ? 'sticker-list' : 'sticker-grid'}>
                     {items.map((sticker) => {
@@ -812,7 +836,7 @@ export default function App() {
                           <article className={`compact-sticker ${quantity > 0 ? 'owned' : 'missing'}`} key={sticker.id}>
                             <span className="compact-code">{sticker.number}</span>
                             <div className="compact-copy"><strong>{sticker.label}</strong><small>{section.flag} {section.short} · {section.name}</small></div>
-                            {quantity > 1 && <span className="compact-duplicate">+{quantity - 1}</span>}
+                            {quantity > 1 && <span className="compact-duplicate">{collectionView === 'duplicates' ? `${quantity} cópias · ${quantity - 1} para troca` : `+${quantity - 1}`}</span>}
                             {viewedFriend ? <span className={`friend-quantity ${quantity > 0 ? 'has' : ''}`}>{quantity === 0 ? 'Falta' : quantity === 1 ? 'Colada' : `${quantity} cópias`}</span> : <div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}><button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button><b>{quantity}</b><button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button></div>}
                           </article>
                         );
@@ -829,10 +853,10 @@ export default function App() {
                 </section>
               );
             })}
-            {visibleStickers.length === 0 && <div className="empty-state">{normalizedSearch ? 'Nenhuma figurinha encontrada para esta busca.' : 'Nenhuma figurinha desta página corresponde ao filtro.'}</div>}
+            {visibleStickers.length === 0 && <div className="empty-state">{normalizedSearch ? 'Nenhuma figurinha encontrada para esta busca.' : collectionView === 'missing' ? 'Parabéns: não há figurinhas faltando nesta coleção.' : collectionView === 'duplicates' ? 'Você ainda não marcou nenhuma figurinha repetida.' : 'Nenhuma figurinha desta página corresponde ao filtro.'}</div>}
           </div>
 
-          {!normalizedSearch && (
+          {collectionView === 'album' && !normalizedSearch && (
             <nav className="album-pagination" aria-label="Navegação pelas páginas do álbum">
               <button disabled={activeSectionIndex === 0} onClick={() => goToAlbumPage(activeSectionIndex - 1)} type="button"><span aria-hidden="true">←</span><span><small>Página anterior</small><b>{sections[activeSectionIndex - 1]?.name ?? 'Início do álbum'}</b></span></button>
               <div className="page-indicator"><span>{activeSectionIndex + 1}</span><small>de {sections.length}</small></div>

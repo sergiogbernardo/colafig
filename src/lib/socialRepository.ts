@@ -85,21 +85,16 @@ export async function saveProfile(userId: string, username: string, displayName:
   return mapProfile(data as ProfileRow);
 }
 
-export async function searchProfiles(userId: string, query: string) {
+export async function searchProfiles(query: string) {
   const normalized = query.toLowerCase().trim().replace(/^@/, '').replace(/[^a-z0-9_-]/g, '');
   if (normalized.length < 3) return [];
-  const { data, error } = await requireClient()
-    .from('profiles')
-    .select('id, username, display_name')
-    .neq('id', userId)
-    .ilike('username', `%${normalized}%`)
-    .limit(12);
+  const { data, error } = await requireClient().rpc('search_profiles', { search_query: normalized });
   if (error) throw error;
   return ((data ?? []) as ProfileRow[]).map(mapProfile).filter((profile): profile is PublicProfile => Boolean(profile));
 }
 
-export async function sendFriendRequest(userId: string, addresseeId: string) {
-  const { error } = await requireClient().from('friendships').insert({ addressee_id: addresseeId, requester_id: userId });
+export async function sendFriendRequest(addresseeId: string) {
+  const { error } = await requireClient().rpc('send_friend_request', { target_user_id: addresseeId });
   if (error) throw error;
 }
 
