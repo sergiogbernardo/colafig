@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { albumCatalog, initialQuantities, sections, stickers } from './data/album';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
@@ -286,13 +286,9 @@ export default function App() {
   const [catalogCategory, setCatalogCategory] = useState<'all' | 'football'>('all');
   const [legalPage, setLegalPage] = useState<LegalPage | null>(legalPageFromHash);
   const [activeSection, setActiveSection] = useState(sections[0].id);
-  const [visibleSection, setVisibleSection] = useState(sections[0].id);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('compact');
-  const [loadedSectionCount, setLoadedSectionCount] = useState(1);
-  const [searchResultLimit, setSearchResultLimit] = useState(60);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -337,7 +333,6 @@ export default function App() {
     const lastPage = window.localStorage.getItem(`${LAST_PAGE_KEY}:${session.user.id}`);
     if (lastPage && sections.some((section) => section.id === lastPage)) {
       setActiveSection(lastPage);
-      setVisibleSection(lastPage);
     }
     setCollectionOwner(session.user.id);
     setLibraryOwner(session.user.id);
@@ -384,74 +379,20 @@ export default function App() {
       });
   }, [filter, normalizedSearch, quantities]);
 
-  const loadedSections = useMemo(
-    () => normalizedSearch ? sections : sections.slice(activeSectionIndex, activeSectionIndex + loadedSectionCount),
-    [activeSectionIndex, loadedSectionCount, normalizedSearch],
+  const displayedSections = useMemo(
+    () => normalizedSearch ? sections : [sections[activeSectionIndex]],
+    [activeSectionIndex, normalizedSearch],
   );
-  const availableStickers = useMemo(() => {
-    if (normalizedSearch) return matchingStickers;
-    const availableSectionIds = new Set(sections.slice(activeSectionIndex).map((section) => section.id));
-    return matchingStickers.filter((sticker) => availableSectionIds.has(sticker.section));
-  }, [activeSectionIndex, matchingStickers, normalizedSearch]);
-  const visibleStickers = useMemo(() => {
-    if (normalizedSearch) return availableStickers.slice(0, searchResultLimit);
-    const loadedIds = new Set(loadedSections.map((section) => section.id));
-    return availableStickers.filter((sticker) => loadedIds.has(sticker.section));
-  }, [availableStickers, loadedSections, normalizedSearch, searchResultLimit]);
+  const visibleStickers = useMemo(
+    () => normalizedSearch ? matchingStickers : matchingStickers.filter((sticker) => sticker.section === activeSection),
+    [activeSection, matchingStickers, normalizedSearch],
+  );
   const stickerGroups = useMemo(
-    () => loadedSections
+    () => displayedSections
       .map((section) => ({ section, items: visibleStickers.filter((sticker) => sticker.section === section.id) }))
       .filter((group) => group.items.length > 0),
-    [loadedSections, visibleStickers],
+    [displayedSections, visibleStickers],
   );
-  const hasMore = visibleStickers.length < availableStickers.length;
-
-  useEffect(() => {
-    setLoadedSectionCount(1);
-    setSearchResultLimit(60);
-  }, [activeSection, filter, normalizedSearch]);
-
-  useEffect(() => {
-    const sentinel = loadMoreRef.current;
-    if (!sentinel || !hasMore) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      if (normalizedSearch) {
-        setSearchResultLimit((current) => Math.min(current + 60, matchingStickers.length));
-      } else {
-        setLoadedSectionCount((current) => {
-          const maximum = sections.length - activeSectionIndex;
-          let nextCount = Math.min(current + 1, maximum);
-          while (nextCount < maximum) {
-            const nextSection = sections[activeSectionIndex + nextCount - 1];
-            if (matchingStickers.some((sticker) => sticker.section === nextSection.id)) break;
-            nextCount += 1;
-          }
-          return nextCount;
-        });
-      }
-    }, { rootMargin: '160px 0px' });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [activeSectionIndex, hasMore, matchingStickers, normalizedSearch]);
-
-  useEffect(() => {
-    if (!session || normalizedSearch) return;
-    const groups = document.querySelectorAll<HTMLElement>('.sticker-section-group[data-section-id]');
-    const rootMargin = window.innerWidth <= 650 ? '-80px 0px -65% 0px' : '-250px 0px -60% 0px';
-    const observer = new IntersectionObserver((entries) => {
-      const current = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      const sectionId = (current?.target as HTMLElement | undefined)?.dataset.sectionId;
-      if (sectionId) {
-        setVisibleSection(sectionId);
-        window.localStorage.setItem(`${LAST_PAGE_KEY}:${session.user.id}`, sectionId);
-      }
-    }, { rootMargin, threshold: 0 });
-    groups.forEach((group) => observer.observe(group));
-    return () => observer.disconnect();
-  }, [normalizedSearch, session, stickerGroups]);
 
   const updateQuantity = (id: string, delta: number) => {
     setQuantities((current) => ({
@@ -462,10 +403,14 @@ export default function App() {
 
   const jumpToSection = (sectionId: string) => {
     setActiveSection(sectionId);
-    setVisibleSection(sectionId);
     setSearch('');
-    setLoadedSectionCount(1);
     window.requestAnimationFrame(() => document.querySelector('.organizer-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
+
+  const goToAlbumPage = (index: number) => {
+    const nextSection = sections[index];
+    if (!nextSection) return;
+    jumpToSection(nextSection.id);
   };
 
   const openAlbum = (slug: string) => {
@@ -484,7 +429,6 @@ export default function App() {
     && normalizeSearch(`${album.name} ${album.category} ${album.year}`).includes(normalizeSearch(catalogSearch)),
   );
   const activeAlbum = albumCatalog.find((album) => album.slug === activeAlbumSlug) ?? albumCatalog[0];
-  const visibleSectionIndex = sections.findIndex((section) => section.id === visibleSection);
 
   const openLegalPage = (page: LegalPage) => {
     window.location.hash = legalHashes[page];
@@ -588,7 +532,7 @@ export default function App() {
           <div className="overview-heading">
             <span className="eyebrow dark">Minha caderneta</span>
             <h1>{activeAlbum.shortName}</h1>
-            <p>Você está em <b>{sections[visibleSectionIndex].name}</b> · seção {visibleSectionIndex + 1} de {sections.length}</p>
+            <p>Você está em <b>{sections[activeSectionIndex].name}</b> · página {activeSectionIndex + 1} de {sections.length}</p>
           </div>
           <div className="overview-progress" aria-label={`${progress}% do álbum completo`}>
             <div><span>Progresso</span><strong>{progress}%</strong></div>
@@ -626,7 +570,7 @@ export default function App() {
             </div>
             <div className="page-field">
               <label htmlFor="album-section">Ir para seção</label>
-              <select id="album-section" onChange={(event) => jumpToSection(event.target.value)} value={visibleSection}>
+              <select id="album-section" onChange={(event) => jumpToSection(event.target.value)} value={activeSection}>
                 {sections.map((section, index) => <option key={section.id} value={section.id}>{index + 1}. {section.flag} {section.short} — {section.name}</option>)}
               </select>
             </div>
@@ -656,7 +600,7 @@ export default function App() {
                 ))}
               </div>
               <p className="results-count" aria-live="polite">
-                {normalizedSearch ? <><b>{availableStickers.length}</b> resultados no álbum</> : filter !== 'all' ? <><b>{availableStickers.length}</b> com este filtro</> : <><span aria-hidden="true">↓</span> Rolagem contínua</>}
+                {normalizedSearch ? <><b>{visibleStickers.length}</b> resultados no álbum</> : <><b>{visibleStickers.length}</b> nesta página</>}
               </p>
             </div>
           </div>
@@ -699,10 +643,16 @@ export default function App() {
                 </section>
               );
             })}
-            {availableStickers.length === 0 && <div className="empty-state">{normalizedSearch ? 'Nenhuma figurinha encontrada para esta busca.' : 'Nenhuma figurinha corresponde ao filtro a partir desta página.'}</div>}
-            {hasMore && <div className="load-more-sentinel" ref={loadMoreRef}><span aria-hidden="true" /><p>Carregando mais figurinhas…</p></div>}
-            {!hasMore && availableStickers.length > 0 && <div className="album-end"><span>✓</span><p>Você chegou ao fim das figurinhas disponíveis.</p></div>}
+            {visibleStickers.length === 0 && <div className="empty-state">{normalizedSearch ? 'Nenhuma figurinha encontrada para esta busca.' : 'Nenhuma figurinha desta página corresponde ao filtro.'}</div>}
           </div>
+
+          {!normalizedSearch && (
+            <nav className="album-pagination" aria-label="Navegação pelas páginas do álbum">
+              <button disabled={activeSectionIndex === 0} onClick={() => goToAlbumPage(activeSectionIndex - 1)} type="button"><span aria-hidden="true">←</span><span><small>Página anterior</small><b>{sections[activeSectionIndex - 1]?.name ?? 'Início do álbum'}</b></span></button>
+              <div className="page-indicator"><span>{activeSectionIndex + 1}</span><small>de {sections.length}</small></div>
+              <button disabled={activeSectionIndex === sections.length - 1} onClick={() => goToAlbumPage(activeSectionIndex + 1)} type="button"><span><small>Próxima página</small><b>{sections[activeSectionIndex + 1]?.name ?? 'Fim do álbum'}</b></span><span aria-hidden="true">→</span></button>
+            </nav>
+          )}
         </section>
       </main>
       )}
