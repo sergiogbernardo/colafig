@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { initialQuantities, sections, stickers } from './data/album';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
@@ -173,6 +173,9 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('compact');
+  const [loadedSectionCount, setLoadedSectionCount] = useState(3);
+  const [searchResultLimit, setSearchResultLimit] = useState(60);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -227,23 +230,79 @@ export default function App() {
   const activeSectionIndex = sections.findIndex((section) => section.id === activeSection);
 
   const normalizedSearch = normalizeSearch(search);
-  const visibleStickers = useMemo(() => {
+  const matchingStickers = useMemo(() => {
     return stickers.filter((sticker) => {
         const quantity = quantities[sticker.id] ?? 0;
         const section = sections.find((item) => item.id === sticker.section)!;
         const searchableText = normalizeSearch(
           `${sticker.number} ${sticker.label} ${section.name} ${section.short}`,
         );
-        const matchesSection = normalizedSearch.length > 0 || sticker.section === activeSection;
         const matchesSearch = normalizedSearch.length === 0 || searchableText.includes(normalizedSearch);
         const matchesFilter =
           filter === 'all' ||
           (filter === 'owned' && quantity > 0) ||
           (filter === 'missing' && quantity === 0) ||
           (filter === 'duplicates' && quantity > 1);
-        return matchesSection && matchesSearch && matchesFilter;
+        return matchesSearch && matchesFilter;
       });
-  }, [activeSection, filter, normalizedSearch, quantities]);
+  }, [filter, normalizedSearch, quantities]);
+
+  const loadedSections = useMemo(
+    () => normalizedSearch ? sections : sections.slice(activeSectionIndex, activeSectionIndex + loadedSectionCount),
+    [activeSectionIndex, loadedSectionCount, normalizedSearch],
+  );
+  const availableStickers = useMemo(() => {
+    if (normalizedSearch) return matchingStickers;
+    const availableSectionIds = new Set(sections.slice(activeSectionIndex).map((section) => section.id));
+    return matchingStickers.filter((sticker) => availableSectionIds.has(sticker.section));
+  }, [activeSectionIndex, matchingStickers, normalizedSearch]);
+  const visibleStickers = useMemo(() => {
+    if (normalizedSearch) return availableStickers.slice(0, searchResultLimit);
+    const loadedIds = new Set(loadedSections.map((section) => section.id));
+    return availableStickers.filter((sticker) => loadedIds.has(sticker.section));
+  }, [availableStickers, loadedSections, normalizedSearch, searchResultLimit]);
+  const stickerGroups = useMemo(
+    () => loadedSections
+      .map((section) => ({ section, items: visibleStickers.filter((sticker) => sticker.section === section.id) }))
+      .filter((group) => group.items.length > 0),
+    [loadedSections, visibleStickers],
+  );
+  const hasMore = visibleStickers.length < availableStickers.length;
+
+  useEffect(() => {
+    setLoadedSectionCount(3);
+    setSearchResultLimit(60);
+  }, [activeSection, filter, normalizedSearch]);
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      if (normalizedSearch) {
+        setSearchResultLimit((current) => Math.min(current + 60, matchingStickers.length));
+      } else {
+        setLoadedSectionCount((current) => Math.min(current + 2, sections.length - activeSectionIndex));
+      }
+    }, { rootMargin: '400px 0px' });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [activeSectionIndex, hasMore, loadedSectionCount, matchingStickers.length, normalizedSearch, searchResultLimit]);
+
+  useEffect(() => {
+    if (!session || normalizedSearch) return;
+    const groups = document.querySelectorAll<HTMLElement>('.sticker-section-group[data-section-id]');
+    const rootMargin = window.innerWidth <= 650 ? '-80px 0px -65% 0px' : '-250px 0px -60% 0px';
+    const observer = new IntersectionObserver((entries) => {
+      const current = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      const sectionId = (current?.target as HTMLElement | undefined)?.dataset.sectionId;
+      if (sectionId) window.localStorage.setItem(`${LAST_PAGE_KEY}:${session.user.id}`, sectionId);
+    }, { rootMargin, threshold: 0 });
+    groups.forEach((group) => observer.observe(group));
+    return () => observer.disconnect();
+  }, [normalizedSearch, session, stickerGroups]);
 
   const updateQuantity = (id: string, delta: number) => {
     setQuantities((current) => ({
@@ -252,12 +311,11 @@ export default function App() {
     }));
   };
 
-  const goToAlbumPage = (index: number) => {
-    const nextSection = sections[index];
-    if (!nextSection) return;
-    setActiveSection(nextSection.id);
+  const jumpToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
     setSearch('');
-    document.querySelector('.organizer-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setLoadedSectionCount(3);
+    window.requestAnimationFrame(() => document.querySelector('.organizer-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
   if (!authReady) {
@@ -328,7 +386,7 @@ export default function App() {
             </div>
             <div className="page-field">
               <label htmlFor="album-section">Página do álbum</label>
-              <select id="album-section" onChange={(event) => setActiveSection(event.target.value)} value={activeSection}>
+              <select id="album-section" onChange={(event) => jumpToSection(event.target.value)} value={activeSection}>
                 {sections.map((section, index) => <option key={section.id} value={section.id}>{index + 1}. {section.flag} {section.short} — {section.name}</option>)}
               </select>
             </div>
@@ -363,81 +421,52 @@ export default function App() {
                   <button className={filter === value ? 'selected' : ''} key={value} onClick={() => setFilter(value)} type="button">{label}</button>
                 ))}
               </div>
-              <p className="results-count" aria-live="polite"><b>{visibleStickers.length}</b> {normalizedSearch ? 'resultados no álbum' : 'nesta página'}</p>
+              <p className="results-count" aria-live="polite"><b>{availableStickers.length}</b> {normalizedSearch ? 'resultados no álbum' : 'a partir daqui'}</p>
             </div>
           </div>
 
-          <div className={viewMode === 'compact' ? 'sticker-list' : 'sticker-grid'}>
-            {visibleStickers.map((sticker) => {
-              const quantity = quantities[sticker.id] ?? 0;
-              const section = sections.find((item) => item.id === sticker.section)!;
-              if (viewMode === 'compact') {
-                return (
-                  <article className={`compact-sticker ${quantity > 0 ? 'owned' : 'missing'}`} key={sticker.id}>
-                    <span className="compact-code">{sticker.number}</span>
-                    <div className="compact-copy">
-                      <strong>{sticker.label}</strong>
-                      <small>{section.flag} {section.short} · {section.name}</small>
-                    </div>
-                    {quantity > 1 && <span className="compact-duplicate">+{quantity - 1}</span>}
-                    <div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}>
-                      <button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button>
-                      <b>{quantity}</b>
-                      <button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button>
-                    </div>
-                  </article>
-                );
-              }
+          <div className="continuous-album">
+            {stickerGroups.map(({ section, items }) => {
+              const sectionIndex = sections.findIndex((item) => item.id === section.id);
+              const sectionOwned = stickers.filter((sticker) => sticker.section === section.id && (quantities[sticker.id] ?? 0) > 0).length;
               return (
-                <article className={`sticker-card ${quantity > 0 ? 'owned' : 'missing'}`} key={sticker.id}>
-                  {quantity > 1 && <span className="duplicate-badge">+{quantity - 1}</span>}
-                  <div className="sticker-art" style={{ '--team-color': section.color } as React.CSSProperties}>
-                    <span className="sticker-code">{sticker.number}</span>
-                    <strong>{section.short}</strong>
-                    <i aria-hidden="true" />
+                <section className="sticker-section-group" data-section-id={section.id} key={section.id} aria-labelledby={`section-${section.id}`}>
+                  <header className="section-divider" id={`section-${section.id}`}>
+                    <span className="section-number">{sectionIndex + 1}</span>
+                    <span className="section-flag">{section.flag}</span>
+                    <span><b>{section.name}</b><small>{section.short} · {sectionOwned}/20 coladas</small></span>
+                  </header>
+                  <div className={viewMode === 'compact' ? 'sticker-list' : 'sticker-grid'}>
+                    {items.map((sticker) => {
+                      const quantity = quantities[sticker.id] ?? 0;
+                      if (viewMode === 'compact') {
+                        return (
+                          <article className={`compact-sticker ${quantity > 0 ? 'owned' : 'missing'}`} key={sticker.id}>
+                            <span className="compact-code">{sticker.number}</span>
+                            <div className="compact-copy"><strong>{sticker.label}</strong><small>{section.flag} {section.short} · {section.name}</small></div>
+                            {quantity > 1 && <span className="compact-duplicate">+{quantity - 1}</span>}
+                            <div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}>
+                              <button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button><b>{quantity}</b><button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button>
+                            </div>
+                          </article>
+                        );
+                      }
+                      return (
+                        <article className={`sticker-card ${quantity > 0 ? 'owned' : 'missing'}`} key={sticker.id}>
+                          {quantity > 1 && <span className="duplicate-badge">+{quantity - 1}</span>}
+                          <div className="sticker-art" style={{ '--team-color': section.color } as React.CSSProperties}><span className="sticker-code">{sticker.number}</span><strong>{section.short}</strong><i aria-hidden="true" /></div>
+                          <div className="sticker-info"><span>{sticker.label}</span><div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}><button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button><b>{quantity}</b><button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button></div></div>
+                        </article>
+                      );
+                    })}
                   </div>
-                  <div className="sticker-info">
-                    <span>{sticker.label}</span>
-                    <div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}>
-                      <button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button>
-                      <b>{quantity}</b>
-                      <button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button>
-                    </div>
-                  </div>
-                </article>
+                </section>
               );
             })}
-            {visibleStickers.length === 0 && (
-              <div className="empty-state">
-                {normalizedSearch ? 'Nenhuma figurinha encontrada para esta busca.' : 'Nenhuma figurinha desta seleção corresponde ao filtro.'}
-              </div>
-            )}
+            {availableStickers.length === 0 && <div className="empty-state">{normalizedSearch ? 'Nenhuma figurinha encontrada para esta busca.' : 'Nenhuma figurinha corresponde ao filtro a partir desta página.'}</div>}
+            {hasMore && <div className="load-more-sentinel" ref={loadMoreRef}><span aria-hidden="true" /><p>Carregando mais figurinhas…</p></div>}
+            {!hasMore && availableStickers.length > 0 && <div className="album-end"><span>✓</span><p>Você chegou ao fim das figurinhas disponíveis.</p></div>}
           </div>
-
-          {!normalizedSearch && (
-            <nav className="album-pagination" aria-label="Navegação pelas páginas do álbum">
-              <button
-                disabled={activeSectionIndex === 0}
-                onClick={() => goToAlbumPage(activeSectionIndex - 1)}
-                type="button"
-              >
-                <span aria-hidden="true">←</span>
-                <span><small>Página anterior</small><b>{sections[activeSectionIndex - 1]?.name ?? 'Início do álbum'}</b></span>
-              </button>
-              <div className="page-indicator">
-                <span>{activeSectionIndex + 1}</span>
-                <small>de {sections.length}</small>
-              </div>
-              <button
-                disabled={activeSectionIndex === sections.length - 1}
-                onClick={() => goToAlbumPage(activeSectionIndex + 1)}
-                type="button"
-              >
-                <span><small>Próxima página</small><b>{sections[activeSectionIndex + 1]?.name ?? 'Fim do álbum'}</b></span>
-                <span aria-hidden="true">→</span>
-              </button>
-            </nav>
-          )}
         </section>
       </main>
 
