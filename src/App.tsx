@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { initialQuantities, sections, stickers } from './data/album';
+import { albumCatalog, initialQuantities, sections, stickers } from './data/album';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 
 type Filter = 'all' | 'owned' | 'missing' | 'duplicates';
 type ViewMode = 'compact' | 'cards';
 type AuthMode = 'login' | 'signup' | 'forgot' | 'recovery';
+type AppView = 'library' | 'catalog' | 'album';
 
 const STORAGE_KEY = 'colafig-collection-v1';
 const LAST_PAGE_KEY = 'colafig-last-page-v1';
+const USER_ALBUMS_KEY = 'colafig-user-albums-v1';
 
 function normalizeSearch(value: string) {
   return value
@@ -24,6 +26,16 @@ function loadCollection(userId: string) {
     return saved ? (JSON.parse(saved) as Record<string, number>) : initialQuantities;
   } catch {
     return initialQuantities;
+  }
+}
+
+function loadUserAlbums(userId: string, hasLegacyCollection: boolean) {
+  try {
+    const saved = window.localStorage.getItem(`${USER_ALBUMS_KEY}:${userId}`);
+    if (saved !== null) return JSON.parse(saved) as string[];
+    return hasLegacyCollection ? [albumCatalog[0].slug] : [];
+  } catch {
+    return hasLegacyCollection ? [albumCatalog[0].slug] : [];
   }
 }
 
@@ -107,8 +119,8 @@ function PublicLanding({ initialMode = 'login' }: { initialMode?: AuthMode }) {
     }
   };
 
-  const title = mode === 'signup' ? 'Crie sua conta' : mode === 'forgot' ? 'Recupere sua senha' : mode === 'recovery' ? 'Defina uma nova senha' : 'Entre na sua caderneta';
-  const subtitle = mode === 'signup' ? 'Comece sua coleção em poucos segundos.' : mode === 'forgot' ? 'Enviaremos um link seguro para seu e-mail.' : mode === 'recovery' ? 'Escolha uma senha nova para continuar.' : 'Sua coleção fica protegida e só você pode acessá-la.';
+  const title = mode === 'signup' ? 'Crie sua conta' : mode === 'forgot' ? 'Recupere sua senha' : mode === 'recovery' ? 'Defina uma nova senha' : 'Entre no ColaFig';
+  const subtitle = mode === 'signup' ? 'Comece sua coleção em poucos segundos.' : mode === 'forgot' ? 'Enviaremos um link seguro para seu e-mail.' : mode === 'recovery' ? 'Escolha uma senha nova para continuar.' : 'Seus álbuns ficam organizados e só você pode acessar sua biblioteca.';
 
   return (
     <div className="app-shell public-shell">
@@ -122,8 +134,8 @@ function PublicLanding({ initialMode = 'login' }: { initialMode?: AuthMode }) {
           <div className="hero-copy">
             <span className="eyebrow">Sua coleção, figurinha por figurinha</span>
             <h1>Cole. Organize.<br /><em>Complete.</em></h1>
-            <p>Controle as figurinhas coladas, descubra o que ainda falta e deixe suas repetidas prontas para troca.</p>
-            <div className="landing-trust"><span>✓ 980 figurinhas</span><span>✓ Acesso protegido</span><span>✓ Feito para celular</span></div>
+            <p>Escolha seus álbuns, controle as figurinhas coladas e deixe as repetidas prontas para troca.</p>
+            <div className="landing-trust"><span>✓ Catálogo em expansão</span><span>✓ Acesso protegido</span><span>✓ Feito para celular</span></div>
           </div>
           <section className="auth-card" id="entrar" aria-labelledby="auth-title">
             <span className="auth-kicker">Minha coleção</span>
@@ -169,6 +181,12 @@ export default function App() {
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, number>>(initialQuantities);
   const [collectionOwner, setCollectionOwner] = useState<string | null>(null);
+  const [libraryOwner, setLibraryOwner] = useState<string | null>(null);
+  const [userAlbums, setUserAlbums] = useState<string[]>([]);
+  const [appView, setAppView] = useState<AppView>('library');
+  const [activeAlbumSlug, setActiveAlbumSlug] = useState(albumCatalog[0].slug);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogCategory, setCatalogCategory] = useState<'all' | 'football'>('all');
   const [activeSection, setActiveSection] = useState(sections[0].id);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
@@ -202,19 +220,30 @@ export default function App() {
   useEffect(() => {
     if (!session) {
       setCollectionOwner(null);
+      setLibraryOwner(null);
+      setUserAlbums([]);
+      setAppView('library');
       setQuantities(initialQuantities);
       return;
     }
+    const hasLegacyCollection = window.localStorage.getItem(`${STORAGE_KEY}:${session.user.id}`) !== null;
     setQuantities(loadCollection(session.user.id));
+    setUserAlbums(loadUserAlbums(session.user.id, hasLegacyCollection));
     const lastPage = window.localStorage.getItem(`${LAST_PAGE_KEY}:${session.user.id}`);
     if (lastPage && sections.some((section) => section.id === lastPage)) setActiveSection(lastPage);
     setCollectionOwner(session.user.id);
+    setLibraryOwner(session.user.id);
   }, [session]);
 
   useEffect(() => {
     if (!session || collectionOwner !== session.user.id) return;
     window.localStorage.setItem(`${STORAGE_KEY}:${session.user.id}`, JSON.stringify(quantities));
   }, [collectionOwner, quantities, session]);
+
+  useEffect(() => {
+    if (!session || libraryOwner !== session.user.id) return;
+    window.localStorage.setItem(`${USER_ALBUMS_KEY}:${session.user.id}`, JSON.stringify(userAlbums));
+  }, [libraryOwner, session, userAlbums]);
 
   useEffect(() => {
     if (!session || collectionOwner !== session.user.id) return;
@@ -318,6 +347,23 @@ export default function App() {
     window.requestAnimationFrame(() => document.querySelector('.organizer-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
+  const openAlbum = (slug: string) => {
+    setActiveAlbumSlug(slug);
+    setAppView('album');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const addAlbum = (slug: string) => {
+    setUserAlbums((current) => current.includes(slug) ? current : [...current, slug]);
+    openAlbum(slug);
+  };
+
+  const filteredCatalog = albumCatalog.filter((album) =>
+    (catalogCategory === 'all' || album.category === 'Futebol')
+    && normalizeSearch(`${album.name} ${album.category} ${album.year}`).includes(normalizeSearch(catalogSearch)),
+  );
+  const activeAlbum = albumCatalog.find((album) => album.slug === activeAlbumSlug) ?? albumCatalog[0];
+
   if (!authReady) {
     return <div className="auth-loading"><span className="brand-mark" aria-hidden="true">CF</span><p>Carregando sua coleção…</p></div>;
   }
@@ -329,13 +375,14 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="ColaFig — página inicial">
+        <a className="brand" href="#top" onClick={() => setAppView('library')} aria-label="ColaFig — meus álbuns">
           <span className="brand-mark" aria-hidden="true">CF</span>
           <span>ColaFig</span>
         </a>
         <nav aria-label="Navegação principal">
-          <a className="nav-active" href="#caderneta">Caderneta</a>
-          <a href="#caderneta" onClick={() => setFilter('duplicates')}>Repetidas</a>
+          <button className={appView === 'library' ? 'nav-active' : ''} onClick={() => setAppView('library')} type="button">Meus álbuns</button>
+          <button className={appView === 'catalog' ? 'nav-active' : ''} onClick={() => setAppView('catalog')} type="button">Catálogo</button>
+          {userAlbums.length > 0 && <button className={appView === 'album' ? 'nav-active' : ''} onClick={() => openAlbum(activeAlbumSlug)} type="button">Caderneta</button>}
         </nav>
         <div className="account-menu">
           <span title={session.user.email}>{session.user.email}</span>
@@ -343,11 +390,68 @@ export default function App() {
         </div>
       </header>
 
+      {appView === 'library' && (
+        <main className="hub-main" id="top">
+          <header className="hub-heading">
+            <div><span className="eyebrow dark">Sua biblioteca</span><h1>Meus álbuns</h1><p>Acompanhe todas as suas coleções em um só lugar.</p></div>
+            <button className="hub-primary" onClick={() => setAppView('catalog')} type="button"><span>＋</span> Adicionar álbum</button>
+          </header>
+          {userAlbums.length > 0 ? (
+            <div className="user-album-grid">
+              {userAlbums.map((slug) => {
+                const album = albumCatalog.find((item) => item.slug === slug);
+                if (!album) return null;
+                return (
+                  <article className="user-album-card" key={album.slug}>
+                    <div className="album-cover" style={{ '--album-accent': album.accent } as React.CSSProperties}><span>COLEÇÃO</span><strong>{album.year}</strong><b>{album.shortName}</b></div>
+                    <div className="album-card-content">
+                      <span className="album-category">{album.category} · {album.year}</span>
+                      <h2>{album.name}</h2>
+                      <p>{owned} de {album.stickerCount} figurinhas</p>
+                      <div className="album-card-progress"><span style={{ width: `${progress}%` }} /></div>
+                      <div className="album-card-meta"><span><b>{progress}%</b> completo</span><span><b>{duplicateCount}</b> repetidas</span></div>
+                      <button onClick={() => openAlbum(album.slug)} type="button">Continuar coleção <span>→</span></button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <section className="empty-library"><span>＋</span><h2>Sua estante está vazia</h2><p>Escolha seu primeiro álbum no catálogo do ColaFig.</p><button onClick={() => setAppView('catalog')} type="button">Explorar catálogo</button></section>
+          )}
+        </main>
+      )}
+
+      {appView === 'catalog' && (
+        <main className="hub-main catalog-main" id="top">
+          <header className="hub-heading">
+            <div><span className="eyebrow dark">Descubra coleções</span><h1>Catálogo de álbuns</h1><p>Escolha um álbum e comece a organizar suas figurinhas.</p></div>
+          </header>
+          <div className="catalog-tools">
+            <div className="search-input"><span aria-hidden="true">⌕</span><input onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Buscar por álbum, categoria ou ano" type="search" value={catalogSearch} />{catalogSearch && <button onClick={() => setCatalogSearch('')} type="button" aria-label="Limpar busca">×</button>}</div>
+            <div className="catalog-categories"><button className={catalogCategory === 'all' ? 'selected' : ''} onClick={() => setCatalogCategory('all')} type="button">Todos</button><button className={catalogCategory === 'football' ? 'selected' : ''} onClick={() => setCatalogCategory('football')} type="button">Futebol</button></div>
+          </div>
+          <div className="catalog-grid">
+            {filteredCatalog.map((album) => {
+              const added = userAlbums.includes(album.slug);
+              return (
+                <article className="catalog-card" key={album.slug}>
+                  <div className="catalog-cover album-cover" style={{ '--album-accent': album.accent } as React.CSSProperties}><span>COLAFIG</span><strong>{album.year}</strong><b>{album.shortName}</b></div>
+                  <div className="catalog-card-copy"><span className="album-category">{album.category} · {album.sectionCount} seções</span><h2>{album.name}</h2><p>{album.description}</p><small>{album.stickerCount} figurinhas</small><button className={added ? 'added' : ''} onClick={() => added ? openAlbum(album.slug) : addAlbum(album.slug)} type="button">{added ? 'Abrir caderneta' : 'Adicionar à coleção'} <span>{added ? '→' : '＋'}</span></button></div>
+                </article>
+              );
+            })}
+            {filteredCatalog.length === 0 && <div className="empty-state">Nenhum álbum encontrado no catálogo.</div>}
+          </div>
+        </main>
+      )}
+
+      {appView === 'album' && (
       <main className="authenticated-main" id="top">
         <section className="collection-overview" aria-label="Resumo da coleção">
           <div className="overview-heading">
             <span className="eyebrow dark">Minha caderneta</span>
-            <h1>Organize sua coleção</h1>
+            <h1>{activeAlbum.shortName}</h1>
             <p>Continue na página {activeSectionIndex + 1}: <b>{sections[activeSectionIndex].name}</b></p>
           </div>
           <div className="overview-progress" aria-label={`${progress}% do álbum completo`}>
@@ -469,6 +573,7 @@ export default function App() {
           </div>
         </section>
       </main>
+      )}
 
       <footer>
         <a className="brand footer-brand" href="#top"><span className="brand-mark">CF</span><span>ColaFig</span></a>

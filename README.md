@@ -2,14 +2,15 @@
 
 **Cole, acompanhe, complete.**
 
-Organizador de figurinhas instalável no celular. Permite criar uma conta,
-marcar figurinhas, controlar repetidas, filtrar a caderneta e acompanhar o
-progresso. A caderneta exige uma sessão válida do Supabase Auth. Enquanto o
-catálogo ainda não foi carregado no PostgreSQL, cada coleção é armazenada no
-navegador e isolada pelo ID do usuário; a sincronização entre dispositivos é a
-próxima etapa.
+Plataforma de organização de álbuns de figurinhas instalável no celular.
+Permite criar uma conta, escolher álbuns em um catálogo curado, marcar
+figurinhas, controlar repetidas e acompanhar o progresso de cada coleção. A
+biblioteca e as cadernetas exigem uma sessão válida do Supabase Auth. Enquanto
+o catálogo ainda não foi carregado no PostgreSQL, a biblioteca e cada coleção
+são armazenadas no navegador e isoladas pelo ID do usuário; a sincronização
+entre dispositivos é a próxima etapa.
 
-O catálogo principal acompanha a estrutura de 980 figurinhas da coleção 2026:
+O primeiro item do catálogo acompanha a estrutura de 980 figurinhas da coleção 2026:
 20 especiais e 20 para cada uma das 48 seleções. O ColaFig usa apenas códigos,
 nomes e elementos visuais próprios; scans e imagens oficiais não são incluídos.
 
@@ -22,7 +23,7 @@ imagens, scans, marcas e layouts oficiais não devem ser adicionados ao reposit�
 - React, TypeScript e Vite;
 - GitHub Pages;
 - PWA com app shell offline;
-- Supabase Auth e PostgreSQL com RLS (integração preparada).
+- Supabase Auth e PostgreSQL com RLS (integração preparada para múltiplos álbuns).
 
 ## Desenvolvimento
 
@@ -52,6 +53,10 @@ ou uma connection string.
 A migração inicial está em `supabase/migrations/`. Ela cria o catálogo, os
 perfis e as coleções, ativa RLS em todas as tabelas e aplica políticas de
 propriedade com `auth.uid()`.
+
+A migração multiálbum adiciona `user_albums`, metadados editoriais ao catálogo
+e restringe leituras públicas a álbuns publicados. Escritas no catálogo não
+são concedidas aos papéis usados pelo navegador.
 
 O frontend oferece cadastro com confirmação de e-mail, login por e-mail e
 senha, recuperação de senha e encerramento de sessão. A URL de confirmação e

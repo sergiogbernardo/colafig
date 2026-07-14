@@ -15,6 +15,34 @@ export type AlbumSection = {
   color: string;
 };
 
+export type CatalogAlbum = {
+  slug: string;
+  name: string;
+  shortName: string;
+  description: string;
+  year: number;
+  category: string;
+  stickerCount: number;
+  sectionCount: number;
+  accent: string;
+  status: 'published' | 'coming-soon';
+};
+
+export const albumCatalog: CatalogAlbum[] = [
+  {
+    slug: 'copa-2026',
+    name: 'Copa do Mundo 2026',
+    shortName: 'Copa 2026',
+    description: 'Seleções, especiais e grandes nomes do torneio mundial de 2026.',
+    year: 2026,
+    category: 'Futebol',
+    stickerCount: 980,
+    sectionCount: 49,
+    accent: '#920a43',
+    status: 'published',
+  },
+];
+
 const palette = ['#087862', '#3157a4', '#b91c4b', '#d65f18', '#6d3fb3', '#16758c'];
 
 function colorFor(code: string) {
