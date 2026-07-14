@@ -7,10 +7,24 @@ type Filter = 'all' | 'owned' | 'missing' | 'duplicates';
 type ViewMode = 'compact' | 'cards';
 type AuthMode = 'login' | 'signup' | 'forgot' | 'recovery';
 type AppView = 'library' | 'catalog' | 'album';
+type LegalPage = 'privacy' | 'cookies' | 'terms';
 
 const STORAGE_KEY = 'colafig-collection-v1';
 const LAST_PAGE_KEY = 'colafig-last-page-v1';
 const USER_ALBUMS_KEY = 'colafig-user-albums-v1';
+const COOKIE_NOTICE_KEY = 'colafig-cookie-notice-v1';
+const AUTH_RETURN_MODE_KEY = 'colafig-auth-return-mode';
+
+const legalHashes: Record<LegalPage, string> = {
+  privacy: '#/privacidade',
+  cookies: '#/cookies',
+  terms: '#/termos',
+};
+
+function legalPageFromHash(): LegalPage | null {
+  const entry = Object.entries(legalHashes).find(([, hash]) => hash === window.location.hash);
+  return entry ? entry[0] as LegalPage : null;
+}
 
 function normalizeSearch(value: string) {
   return value
@@ -47,11 +61,87 @@ function authErrorMessage(mode: AuthMode, code?: string) {
   return 'Não foi possível concluir agora. Tente novamente em instantes.';
 }
 
-function PublicLanding({ initialMode = 'login' }: { initialMode?: AuthMode }) {
-  const [mode, setMode] = useState<AuthMode>(initialMode);
+function SiteFooter({ onOpenLegal }: { onOpenLegal: (page: LegalPage) => void }) {
+  return (
+    <footer className="site-footer">
+      <a className="brand footer-brand" href="#top"><span className="brand-mark">CF</span><span>ColaFig</span></a>
+      <p>© 2026 ColaFig · Desenvolvido por <a href="https://github.com/sergiogbernardo" rel="noreferrer" target="_blank">Sergio Bernardo</a></p>
+      <nav aria-label="Links legais"><button onClick={() => onOpenLegal('privacy')} type="button">Privacidade</button><button onClick={() => onOpenLegal('cookies')} type="button">Cookies</button><button onClick={() => onOpenLegal('terms')} type="button">Termos de uso</button></nav>
+    </footer>
+  );
+}
+
+function CookieNotice({ onOpenCookies }: { onOpenCookies: () => void }) {
+  const [visible, setVisible] = useState(() => window.localStorage.getItem(COOKIE_NOTICE_KEY) !== 'acknowledged');
+  if (!visible) return null;
+  const acknowledge = () => {
+    window.localStorage.setItem(COOKIE_NOTICE_KEY, 'acknowledged');
+    setVisible(false);
+  };
+  return (
+    <aside className="cookie-notice" aria-label="Aviso de cookies e armazenamento local">
+      <div><strong>Privacidade no ColaFig</strong><p>Usamos somente armazenamento essencial para login, segurança, preferências e funcionamento offline. Não usamos cookies de publicidade ou analytics.</p></div>
+      <div className="cookie-actions"><button className="cookie-details" onClick={onOpenCookies} type="button">Ver detalhes</button><button className="cookie-accept" onClick={acknowledge} type="button">Entendi</button></div>
+    </aside>
+  );
+}
+
+function LegalDocument({ page, onBack, onOpenLegal }: { page: LegalPage; onBack: () => void; onOpenLegal: (page: LegalPage) => void }) {
+  const titles: Record<LegalPage, string> = { privacy: 'Política de Privacidade', cookies: 'Cookies e armazenamento local', terms: 'Termos de Uso' };
+  return (
+    <div className="app-shell legal-shell">
+      <header className="topbar"><button className="brand legal-brand" onClick={onBack} type="button"><span className="brand-mark" aria-hidden="true">CF</span><span>ColaFig</span></button><button className="legal-back" onClick={onBack} type="button">← Voltar</button></header>
+      <main className="legal-main" id="top">
+        <header className="legal-heading"><span className="eyebrow dark">Transparência e confiança</span><h1>{titles[page]}</h1><p>Última atualização: 14 de julho de 2026.</p></header>
+        <nav className="legal-tabs" aria-label="Documentos legais"><button className={page === 'privacy' ? 'selected' : ''} onClick={() => onOpenLegal('privacy')} type="button">Privacidade</button><button className={page === 'cookies' ? 'selected' : ''} onClick={() => onOpenLegal('cookies')} type="button">Cookies</button><button className={page === 'terms' ? 'selected' : ''} onClick={() => onOpenLegal('terms')} type="button">Termos</button></nav>
+
+        {page === 'privacy' && <article className="legal-content">
+          <p className="legal-intro">Esta política explica, em linguagem direta, como o ColaFig trata dados pessoais ao oferecer contas e ferramentas para organizar coleções de figurinhas.</p>
+          <section><h2>1. Quem é responsável</h2><p>O controlador dos dados é <strong>Sergio Bernardo</strong>, responsável pelo ColaFig. Para dúvidas ou para exercer direitos relacionados à LGPD, use o canal <a href="mailto:privacidade@sabion.io">privacidade@sabion.io</a>.</p></section>
+          <section><h2>2. Dados tratados</h2><ul><li><strong>Conta:</strong> e-mail, identificador interno e informações técnicas de autenticação.</li><li><strong>Coleções:</strong> álbuns escolhidos, quantidades, repetidas, progresso e última seção visitada.</li><li><strong>Dados técnicos:</strong> endereço IP, data e hora, navegador e registros de segurança que podem ser processados pelos provedores de infraestrutura.</li><li><strong>Preferências locais:</strong> sessão, biblioteca, visualização, aviso de privacidade e cache offline.</li></ul><p>O ColaFig não solicita CPF, endereço, pagamento ou dados pessoais sensíveis.</p></section>
+          <section><h2>3. Para que usamos os dados</h2><ul><li>Criar e proteger a conta e permitir login e recuperação de senha.</li><li>Manter a biblioteca e o progresso das coleções.</li><li>Prevenir abuso, investigar falhas e proteger o serviço.</li><li>Cumprir obrigações legais e atender solicitações dos titulares.</li></ul><p>Os tratamentos necessários para fornecer a conta e a caderneta se apoiam na execução do serviço solicitado. Segurança e prevenção de abuso podem se apoiar no legítimo interesse, sempre com avaliação de necessidade e respeito aos direitos do titular. Consentimento será solicitado antes de qualquer futura tecnologia opcional que dele dependa.</p></section>
+          <section><h2>4. Com quem os dados podem ser compartilhados</h2><p>Usamos fornecedores de infraestrutura para operar o serviço: <strong>Supabase</strong>, para autenticação e banco de dados, e <strong>GitHub Pages</strong>, para hospedagem do aplicativo. Esses fornecedores podem tratar dados técnicos e operar infraestrutura fora do Brasil conforme seus contratos e políticas. Não vendemos dados pessoais e não os compartilhamos para publicidade.</p></section>
+          <section><h2>5. Retenção e exclusão</h2><p>Dados da conta e das coleções são mantidos enquanto a conta estiver ativa ou pelo tempo necessário para cumprir as finalidades informadas. Registros técnicos e cópias de segurança podem permanecer por períodos adicionais definidos pelos provedores ou necessários para segurança e obrigações legais. Dados salvos apenas no dispositivo permanecem até serem apagados pelo usuário, pelo navegador ou pelo próprio aplicativo.</p></section>
+          <section><h2>6. Seus direitos</h2><p>Nos termos da LGPD, você pode solicitar confirmação do tratamento, acesso, correção, informação sobre compartilhamentos, portabilidade quando aplicável, oposição, revisão de decisões automatizadas e eliminação ou anonimização quando cabível. Também pode revogar consentimentos futuros. Poderemos pedir informações para confirmar sua identidade antes de atender uma solicitação.</p></section>
+          <section><h2>7. Segurança e menores de idade</h2><p>Aplicamos controles de acesso, autenticação, comunicação protegida e políticas de banco que isolam dados entre usuários. Nenhum sistema é totalmente imune a riscos. O ColaFig não é destinado ao uso autônomo por crianças; contas de menores devem ser criadas e acompanhadas por responsável legal.</p></section>
+          <section><h2>8. Atualizações e referências</h2><p>Esta política poderá ser atualizada quando o serviço, os fornecedores ou a legislação mudarem. Alterações relevantes serão comunicadas no aplicativo e a data acima será revisada.</p><p>Consulte a <a href="https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm" rel="noreferrer" target="_blank">Lei Geral de Proteção de Dados Pessoais</a> e os <a href="https://www.gov.br/anpd/pt-br/centrais-de-conteudo/materiais-educativos-e-publicacoes" rel="noreferrer" target="_blank">materiais oficiais da ANPD</a>.</p></section>
+        </article>}
+
+        {page === 'cookies' && <article className="legal-content">
+          <p className="legal-intro">O ColaFig não usa cookies de publicidade ou ferramentas de analytics. Utilizamos tecnologias essenciais de navegador para manter o serviço funcionando.</p>
+          <section><h2>1. O que é utilizado</h2><div className="storage-table"><div><b>Sessão do Supabase</b><span>Armazenamento local</span><p>Mantém o usuário autenticado com segurança e renova a sessão.</p><em>Essencial</em></div><div><b>Biblioteca e coleção</b><span>Armazenamento local</span><p>Guarda álbuns, quantidades e última seção enquanto a sincronização completa está em implantação.</p><em>Essencial</em></div><div><b>Preferências</b><span>Armazenamento local</span><p>Lembra visualização e o reconhecimento deste aviso.</p><em>Essencial</em></div><div><b>Cache PWA</b><span>Cache Storage</span><p>Armazena arquivos do aplicativo para carregamento rápido e funcionamento offline.</p><em>Essencial</em></div></div></section>
+          <section><h2>2. Tecnologias não utilizadas</h2><p>Não instalamos cookies de publicidade, perfil comportamental ou analytics. Caso isso mude, tecnologias não essenciais permanecerão desativadas por padrão e será apresentada uma escolha específica antes da ativação.</p></section>
+          <section><h2>3. Como controlar</h2><p>Você pode apagar dados do site nas configurações do navegador. Isso poderá encerrar sua sessão, remover preferências, apagar o cache offline e, enquanto a sincronização com o banco não estiver concluída, eliminar dados da coleção salvos somente neste dispositivo.</p></section>
+          <section><h2>4. Duração</h2><p>A sessão é renovada enquanto válida e removida ao sair ou limpar os dados do site. Preferências e dados locais permanecem até serem substituídos, apagados pelo usuário ou removidos pelo navegador.</p><p>Saiba mais no <a href="https://www.gov.br/anpd/pt-br/centrais-de-conteudo/materiais-educativos-e-publicacoes/guia-orientativo-cookies-e-protecao-de-dados-pessoais.pdf" rel="noreferrer" target="_blank">Guia Orientativo sobre Cookies da ANPD</a>.</p></section>
+        </article>}
+
+        {page === 'terms' && <article className="legal-content">
+          <p className="legal-intro">Ao criar uma conta ou usar o ColaFig, você concorda com estes termos. Se não concordar, não utilize o serviço.</p>
+          <section><h2>1. Finalidade do serviço</h2><p>O ColaFig é uma ferramenta independente para organizar coleções físicas de figurinhas. Não vende figurinhas, não garante a conclusão de coleções e não representa fabricantes, editoras ou organizações esportivas.</p></section>
+          <section><h2>2. Conta e responsabilidade</h2><p>Você deve fornecer um e-mail válido, manter sua senha protegida e comunicar qualquer suspeita de acesso indevido. O uso por menores deve ocorrer sob supervisão e responsabilidade de representante legal.</p></section>
+          <section><h2>3. Uso permitido</h2><p>Não é permitido tentar acessar contas de terceiros, contornar controles de segurança, automatizar requisições abusivas, interferir no funcionamento do serviço ou usar o ColaFig para atividade ilícita.</p></section>
+          <section><h2>4. Catálogo e propriedade intelectual</h2><p>O catálogo usa códigos, nomes e informações factuais para organização. Elementos visuais do ColaFig são próprios. Marcas e nomes de terceiros pertencem aos respectivos titulares. Não devem ser enviados scans, cópias integrais de páginas ou outros materiais protegidos sem autorização.</p></section>
+          <section><h2>5. Disponibilidade e alterações</h2><p>O serviço pode passar por manutenção, apresentar indisponibilidade ou ter recursos modificados. Empregaremos esforços razoáveis para preservar dados e continuidade, sem prometer operação ininterrupta.</p></section>
+          <section><h2>6. Encerramento</h2><p>Contas que violem estes termos ou coloquem o serviço e outros usuários em risco poderão ser restringidas. O usuário poderá solicitar exclusão da conta e dos dados associados pelo canal de privacidade.</p></section>
+          <section><h2>7. Lei aplicável e contato</h2><p>Estes termos são regidos pelas leis brasileiras. Dúvidas podem ser enviadas para <a href="mailto:privacidade@sabion.io">privacidade@sabion.io</a>.</p></section>
+        </article>}
+      </main>
+      <SiteFooter onOpenLegal={onOpenLegal} />
+    </div>
+  );
+}
+
+function PublicLanding({ initialMode = 'login', onOpenLegal }: { initialMode?: AuthMode; onOpenLegal: (page: LegalPage) => void }) {
+  const [mode, setMode] = useState<AuthMode>(() => {
+    if (initialMode === 'recovery') return 'recovery';
+    const savedMode = window.sessionStorage.getItem(AUTH_RETURN_MODE_KEY) as AuthMode | null;
+    window.sessionStorage.removeItem(AUTH_RETURN_MODE_KEY);
+    return savedMode ?? initialMode;
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
@@ -63,7 +153,13 @@ function PublicLanding({ initialMode = 'login' }: { initialMode?: AuthMode }) {
     setMode(nextMode);
     setPassword('');
     setPasswordConfirmation('');
+    setAcceptedTerms(false);
     setFeedback(null);
+  };
+
+  const openLegalFromAuth = (page: LegalPage) => {
+    window.sessionStorage.setItem(AUTH_RETURN_MODE_KEY, mode);
+    onOpenLegal(page);
   };
 
   const submitAuth = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -155,6 +251,7 @@ function PublicLanding({ initialMode = 'login' }: { initialMode?: AuthMode }) {
                   <label>Confirmar nova senha<input autoComplete="new-password" minLength={8} onChange={(event) => setPasswordConfirmation(event.target.value)} required type="password" value={passwordConfirmation} /></label>
                 )}
                 {mode === 'login' && <button className="forgot-link" onClick={() => changeMode('forgot')} type="button">Esqueci minha senha</button>}
+                {mode === 'signup' && <label className="terms-check"><input checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required type="checkbox" /><span>Li e concordo com os <button onClick={() => openLegalFromAuth('terms')} type="button">Termos de Uso</button> e li a <button onClick={() => openLegalFromAuth('privacy')} type="button">Política de Privacidade</button>.</span></label>}
                 {feedback && <div className={`auth-feedback ${feedback.type}`} role="status">{feedback.text}</div>}
                 <button className="auth-submit" disabled={pending} type="submit">{pending ? 'Aguarde…' : mode === 'signup' ? 'Criar conta' : mode === 'forgot' ? 'Enviar instruções' : mode === 'recovery' ? 'Salvar nova senha' : 'Entrar'}</button>
               </form>
@@ -170,7 +267,7 @@ function PublicLanding({ initialMode = 'login' }: { initialMode?: AuthMode }) {
           <article><span className="summary-icon blue">↺</span><div><strong>Separe repetidas</strong><p>Saiba exatamente o que levar para troca.</p></div></article>
         </section>
       </main>
-      <footer><a className="brand footer-brand" href="#top"><span className="brand-mark">CF</span><span>ColaFig</span></a><p>Feito para quem vibra a cada figurinha nova.</p><small>Projeto independente — sem vínculo com fabricantes ou organizações esportivas.</small></footer>
+      <SiteFooter onOpenLegal={onOpenLegal} />
     </div>
   );
 }
@@ -187,6 +284,7 @@ export default function App() {
   const [activeAlbumSlug, setActiveAlbumSlug] = useState(albumCatalog[0].slug);
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogCategory, setCatalogCategory] = useState<'all' | 'football'>('all');
+  const [legalPage, setLegalPage] = useState<LegalPage | null>(legalPageFromHash);
   const [activeSection, setActiveSection] = useState(sections[0].id);
   const [visibleSection, setVisibleSection] = useState(sections[0].id);
   const [filter, setFilter] = useState<Filter>('all');
@@ -216,6 +314,12 @@ export default function App() {
     });
 
     return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const syncLegalRoute = () => setLegalPage(legalPageFromHash());
+    window.addEventListener('hashchange', syncLegalRoute);
+    return () => window.removeEventListener('hashchange', syncLegalRoute);
   }, []);
 
   useEffect(() => {
@@ -373,15 +477,30 @@ export default function App() {
   const activeAlbum = albumCatalog.find((album) => album.slug === activeAlbumSlug) ?? albumCatalog[0];
   const visibleSectionIndex = sections.findIndex((section) => section.id === visibleSection);
 
+  const openLegalPage = (page: LegalPage) => {
+    window.location.hash = legalHashes[page];
+    setLegalPage(page);
+  };
+
+  const closeLegalPage = () => {
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    setLegalPage(null);
+  };
+
   if (!authReady) {
     return <div className="auth-loading"><span className="brand-mark" aria-hidden="true">CF</span><p>Carregando sua coleção…</p></div>;
   }
 
+  if (legalPage) {
+    return <LegalDocument page={legalPage} onBack={closeLegalPage} onOpenLegal={openLegalPage} />;
+  }
+
   if (!session || recoveryMode) {
-    return <PublicLanding initialMode={recoveryMode ? 'recovery' : 'login'} />;
+    return <><PublicLanding initialMode={recoveryMode ? 'recovery' : 'login'} onOpenLegal={openLegalPage} /><CookieNotice onOpenCookies={() => openLegalPage('cookies')} /></>;
   }
 
   return (
+    <>
     <div className="app-shell">
       <header className="topbar">
         <a className="brand" href="#top" onClick={() => setAppView('library')} aria-label="ColaFig — meus álbuns">
@@ -579,11 +698,9 @@ export default function App() {
       </main>
       )}
 
-      <footer>
-        <a className="brand footer-brand" href="#top"><span className="brand-mark">CF</span><span>ColaFig</span></a>
-        <p>Feito para quem vibra a cada figurinha nova.</p>
-        <small>Projeto independente — sem vínculo com fabricantes ou organizações esportivas.</small>
-      </footer>
+      <SiteFooter onOpenLegal={openLegalPage} />
     </div>
+    <CookieNotice onOpenCookies={() => openLegalPage('cookies')} />
+    </>
   );
 }
