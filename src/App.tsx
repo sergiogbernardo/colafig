@@ -40,6 +40,7 @@ export default function App() {
     0,
   );
   const progress = Math.round((owned / stickers.length) * 100);
+  const activeSectionIndex = sections.findIndex((section) => section.id === activeSection);
 
   const normalizedSearch = normalizeSearch(search);
   const visibleStickers = useMemo(() => {
@@ -65,6 +66,14 @@ export default function App() {
       ...current,
       [id]: Math.max(0, Math.min(9, (current[id] ?? 0) + delta)),
     }));
+  };
+
+  const goToAlbumPage = (index: number) => {
+    const nextSection = sections[index];
+    if (!nextSection) return;
+    setActiveSection(nextSection.id);
+    setSearch('');
+    document.querySelector('.section-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
@@ -136,7 +145,7 @@ export default function App() {
           </div>
 
           <div className="section-picker">
-            <label htmlFor="album-section">Seção do álbum</label>
+            <label htmlFor="album-section">Página / seção do álbum</label>
             <select
               id="album-section"
               onChange={(event) => setActiveSection(event.target.value)}
@@ -155,7 +164,7 @@ export default function App() {
               return (
                 <div className="selected-section" aria-live="polite">
                   <span className="flag">{section.flag}</span>
-                  <span><b>{section.name}</b><small>{sectionOwned} de {sectionStickers.length} coladas</small></span>
+                  <span><b>{section.name}</b><small>Página {activeSectionIndex + 1} de {sections.length} · {sectionOwned} de {sectionStickers.length} coladas</small></span>
                 </div>
               );
             })()}
@@ -248,6 +257,31 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {!normalizedSearch && (
+            <nav className="album-pagination" aria-label="Navegação pelas páginas do álbum">
+              <button
+                disabled={activeSectionIndex === 0}
+                onClick={() => goToAlbumPage(activeSectionIndex - 1)}
+                type="button"
+              >
+                <span aria-hidden="true">←</span>
+                <span><small>Página anterior</small><b>{sections[activeSectionIndex - 1]?.name ?? 'Início do álbum'}</b></span>
+              </button>
+              <div className="page-indicator">
+                <span>{activeSectionIndex + 1}</span>
+                <small>de {sections.length}</small>
+              </div>
+              <button
+                disabled={activeSectionIndex === sections.length - 1}
+                onClick={() => goToAlbumPage(activeSectionIndex + 1)}
+                type="button"
+              >
+                <span><small>Próxima página</small><b>{sections[activeSectionIndex + 1]?.name ?? 'Fim do álbum'}</b></span>
+                <span aria-hidden="true">→</span>
+              </button>
+            </nav>
+          )}
         </section>
       </main>
 
