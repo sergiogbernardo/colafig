@@ -75,12 +75,11 @@ export async function loadSocialState(userId: string): Promise<SocialState> {
 
 export async function saveProfile(userId: string, username: string, displayName: string) {
   const normalizedUsername = username.toLowerCase().trim();
-  const { data, error } = await requireClient().from('profiles').upsert({
+  const { data, error } = await requireClient().from('profiles').update({
     display_name: displayName.trim() || null,
-    id: userId,
     updated_at: new Date().toISOString(),
     username: normalizedUsername,
-  }).select('id, username, display_name').single();
+  }).eq('id', userId).select('id, username, display_name').single();
   if (error) throw error;
   return mapProfile(data as ProfileRow);
 }

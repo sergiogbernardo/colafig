@@ -82,15 +82,18 @@ Critério de aceite: DPA, mecanismo de transferência e lista de subprocessadore
 
 ## Entrega 6 — ECA Digital e menores
 
-Status: decisão jurídica/produto pendente; não implementar um checkbox isolado como se fosse verificação etária.
+Status: contenção provisória 18+ implementada no código e na migration `20260714006000_adult_only_access.sql`; revisão jurídica e adequação à orientação definitiva da ANPD continuam pendentes.
 
-1. Avaliar público, linguagem, divulgação, métricas e natureza do catálogo para decidir se há acesso provável por crianças ou adolescentes.
-2. Se aplicável, selecionar uma abordagem proporcional de aferição etária e separar as experiências adulto/menor.
-3. Projetar consentimento ou atuação do responsável, supervisão, informações de risco, privacidade por padrão e controles sociais restritos.
-4. Minimizar a idade coletada: preferir faixa/resultado de elegibilidade à data de nascimento completa quando juridicamente possível.
-5. Validar o fluxo com assessoria jurídica e teste de usabilidade antes de liberar cadastro de menores.
+- Nesta fase, não é oferecida uma experiência para crianças ou adolescentes: novas contas e contas existentes precisam confirmar elegibilidade 18+.
+- A data de nascimento é validada no banco durante a requisição e descartada. O perfil guarda somente o resultado positivo, a data da confirmação e a versão da regra.
+- Campos de elegibilidade enviados pelo navegador são removidos pelo gatilho do banco antes da criação da conta; somente o fluxo controlado do banco pode confirmar a elegibilidade.
+- RLS restritiva bloqueia coleções, biblioteca e amizades para contas sem confirmação, independentemente da interface.
+- Contas existentes passam por uma confirmação obrigatória antes de a aplicação carregar dados locais ou remotos.
+- A autodeclaração de data é uma contenção provisória e não deve ser apresentada como aferição etária robusta ou conformidade jurídica definitiva.
 
-Critério de aceite: há decisão documentada de aplicabilidade e, quando aplicável, o fluxo impede que um menor contorne apenas no cliente os controles de responsável e privacidade.
+Próximos passos: acompanhar a orientação definitiva da ANPD, prevista no cronograma oficial para agosto de 2026; reavaliar o mecanismo de aferição; obter revisão jurídica; documentar testes e decisão sobre eventual experiência futura para menores.
+
+Critério de aceite provisório: uma conta não confirmada não acessa coleções nem recursos sociais por API, e a data de nascimento não persiste no Auth nem nas tabelas públicas.
 
 ## Ordem recomendada de publicação
 
@@ -99,7 +102,7 @@ Critério de aceite: há decisão documentada de aplicabilidade e, quando aplic�
 3. Configurar cabeçalho anti-frame em uma camada HTTP do domínio.
 4. Implementar bloqueio e denúncia.
 5. Fechar DPA/transferência e executar o runbook LGPD.
-6. Tomar a decisão ECA Digital antes de promover o produto diretamente para público infantojuvenil.
+6. Validar juridicamente e revisar a contenção 18+ após a orientação definitiva da ANPD; não promover o produto ao público infantojuvenil.
 
 ## Evidências mínimas por release
 
