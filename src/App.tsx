@@ -277,7 +277,6 @@ export default function App() {
         </a>
         <nav aria-label="Navegação principal">
           <a className="nav-active" href="#caderneta">Caderneta</a>
-          <a href="#caderneta" onClick={() => setFilter('missing')}>Faltantes</a>
           <a href="#caderneta" onClick={() => setFilter('duplicates')}>Repetidas</a>
         </nav>
         <div className="account-menu">
