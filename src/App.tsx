@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { FriendsPage } from './components/FriendsPage';
+import { CollectionListActions } from './components/CollectionListActions';
+import { PublicSharePage } from './components/PublicSharePage';
 import { TradeComparison } from './components/TradeComparison';
 import { albumCatalog, initialQuantities, sections, stickers } from './data/album';
 import { loadRemoteCollection, migrateCollection, saveStickerQuantity, saveUserAlbum, type RemoteCollectionState } from './lib/collectionRepository';
@@ -31,6 +33,11 @@ const legalHashes: Record<LegalPage, string> = {
 function legalPageFromHash(): LegalPage | null {
   const entry = Object.entries(legalHashes).find(([, hash]) => hash === window.location.hash);
   return entry ? entry[0] as LegalPage : null;
+}
+
+function publicShareTokenFromHash() {
+  const match = window.location.hash.match(/^#\/lista\/([0-9a-f-]{36})$/i);
+  return match?.[1] ?? null;
 }
 
 function normalizeSearch(value: string) {
@@ -167,7 +174,7 @@ function LegalDocument({ page, onBack, onOpenLegal }: { page: LegalPage; onBack:
           <section><h2>1. Quem é responsável</h2><p>O controlador dos dados é <strong>Sergio Bernardo</strong>, responsável pelo ColaFig. Para dúvidas ou para exercer direitos relacionados à LGPD, use o canal <a href="mailto:privacidade@sabion.io">privacidade@sabion.io</a>.</p></section>
           <section><h2>2. Dados tratados</h2><ul><li><strong>Conta:</strong> e-mail, identificador interno e informações técnicas de autenticação.</li><li><strong>Perfil social:</strong> nome de usuário, nome exibido, convites e conexões de amizade.</li><li><strong>Coleções:</strong> álbuns escolhidos, quantidades, repetidas, progresso e última seção visitada.</li><li><strong>Dados técnicos:</strong> endereço IP, data e hora, navegador e registros de segurança que podem ser processados pelos provedores de infraestrutura.</li><li><strong>Preferências locais:</strong> sessão, biblioteca, visualização, aviso de privacidade e cache offline.</li></ul><p>O ColaFig não solicita data de nascimento, CPF, endereço, pagamento ou dados pessoais sensíveis.</p></section>
           <section><h2>3. Para que usamos os dados</h2><ul><li>Criar e proteger a conta e permitir login e recuperação de senha.</li><li>Manter a biblioteca e o progresso das coleções.</li><li>Prevenir abuso, investigar falhas e proteger o serviço.</li><li>Cumprir obrigações legais e atender solicitações dos titulares.</li></ul><p>Os tratamentos necessários para fornecer a conta e a caderneta se apoiam na execução do serviço solicitado. Segurança e prevenção de abuso podem se apoiar no legítimo interesse, sempre com avaliação de necessidade e respeito aos direitos do titular. Consentimento será solicitado antes de qualquer futura tecnologia opcional que dele dependa.</p></section>
-          <section><h2>4. Compartilhamento e visibilidade social</h2><p>Seu e-mail e suas credenciais permanecem privados. O nome de usuário e o nome exibido podem ser encontrados por outras pessoas autenticadas. Apenas amizades aceitas podem consultar seus álbuns, faltantes, coladas e repetidas, sempre em modo somente leitura. Você pode cancelar convites ou remover uma amizade a qualquer momento.</p><p>Usamos fornecedores de infraestrutura para operar o serviço: <strong>Supabase</strong>, para autenticação e banco de dados, e <strong>GitHub Pages</strong>, para hospedagem do aplicativo. Esses fornecedores podem tratar dados técnicos e operar infraestrutura fora do Brasil conforme seus contratos e políticas. Não vendemos dados pessoais e não os compartilhamos para publicidade.</p></section>
+          <section><h2>4. Compartilhamento e visibilidade social</h2><p>Seu e-mail e suas credenciais permanecem privados. O nome de usuário e o nome exibido podem ser encontrados por outras pessoas autenticadas. Apenas amizades aceitas podem consultar seu álbum completo, sempre em modo somente leitura. Você pode cancelar convites ou remover uma amizade a qualquer momento.</p><p>Ao criar voluntariamente um link público de faltantes ou repetidas, qualquer pessoa que receber o endereço poderá ver o nome exibido da coleção e somente a lista escolhida, sem precisar de conta. O link usa um código aleatório, não aparece em buscas internas e pode ser desativado pelo proprietário.</p><p>Usamos fornecedores de infraestrutura para operar o serviço: <strong>Supabase</strong>, para autenticação e banco de dados, e <strong>GitHub Pages</strong>, para hospedagem do aplicativo. Esses fornecedores podem tratar dados técnicos e operar infraestrutura fora do Brasil conforme seus contratos e políticas. Não vendemos dados pessoais e não os compartilhamos para publicidade.</p></section>
           <section><h2>5. Retenção e exclusão</h2><p>Dados da conta e das coleções são mantidos enquanto a conta estiver ativa ou pelo tempo necessário para cumprir as finalidades informadas. Registros técnicos e cópias de segurança podem permanecer por períodos adicionais definidos pelos provedores ou necessários para segurança e obrigações legais. Dados salvos apenas no dispositivo permanecem até serem apagados pelo usuário, pelo navegador ou pelo próprio aplicativo.</p></section>
           <section><h2>6. Seus direitos</h2><p>Nos termos da LGPD, você pode solicitar confirmação do tratamento, acesso, correção, informação sobre compartilhamentos, portabilidade quando aplicável, oposição, revisão de decisões automatizadas e eliminação ou anonimização quando cabível. Também pode revogar consentimentos futuros. Poderemos pedir informações para confirmar sua identidade antes de atender uma solicitação.</p></section>
           <section><h2>7. Segurança</h2><p>Aplicamos controles de acesso, autenticação, comunicação protegida e políticas de banco que isolam dados entre usuários. Nenhum sistema é totalmente imune a riscos. Durante o desenvolvimento e os testes, responsáveis devem acompanhar o uso por crianças e adolescentes.</p></section>
@@ -352,6 +359,7 @@ export default function App() {
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogCategory, setCatalogCategory] = useState<'all' | 'football'>('all');
   const [legalPage, setLegalPage] = useState<LegalPage | null>(legalPageFromHash);
+  const [publicShareToken, setPublicShareToken] = useState<string | null>(publicShareTokenFromHash);
   const [activeSection, setActiveSection] = useState(sections[0].id);
   const [filter, setFilter] = useState<Filter>('all');
   const [collectionView, setCollectionView] = useState<CollectionView>('album');
@@ -386,7 +394,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const syncLegalRoute = () => setLegalPage(legalPageFromHash());
+    const syncLegalRoute = () => {
+      setLegalPage(legalPageFromHash());
+      setPublicShareToken(publicShareTokenFromHash());
+    };
     window.addEventListener('hashchange', syncLegalRoute);
     return () => window.removeEventListener('hashchange', syncLegalRoute);
   }, []);
@@ -636,6 +647,10 @@ export default function App() {
     return <div className="auth-loading"><span className="brand-mark" aria-hidden="true">CF</span><p>Carregando sua coleção…</p></div>;
   }
 
+  if (publicShareToken) {
+    return <PublicSharePage token={publicShareToken} />;
+  }
+
   if (legalPage) {
     return <LegalDocument page={legalPage} onBack={closeLegalPage} onOpenLegal={openLegalPage} />;
   }
@@ -755,7 +770,7 @@ export default function App() {
           </nav>
           <div className="album-heading">
             <div><span className="eyebrow dark">{collectionView === 'album' ? 'Caderneta' : 'Lista da coleção'}</span><h2>{collectionView === 'missing' ? 'Faltantes' : collectionView === 'duplicates' ? 'Repetidas' : 'Figurinhas'}</h2></div>
-            <p>{collectionView === 'missing' ? 'Todas as figurinhas que ainda faltam, reunidas por seleção.' : collectionView === 'duplicates' ? 'Todas as cópias extras prontas para troca, sem procurar página por página.' : viewedFriend ? 'Consulte as figurinhas desta coleção.' : 'Marque e encontre qualquer figurinha do álbum.'}</p>
+            <div className="album-heading-side"><p>{collectionView === 'missing' ? 'Todas as figurinhas que ainda faltam, reunidas por seleção.' : collectionView === 'duplicates' ? 'Todas as cópias extras prontas para troca, sem procurar página por página.' : viewedFriend ? 'Consulte as figurinhas desta coleção.' : 'Marque e encontre qualquer figurinha do álbum.'}</p>{collectionView !== 'album' && <CollectionListActions albumName={activeAlbum.name} albumSlug={activeAlbum.slug} canShare={!viewedFriend} ownerName={viewedFriend?.profile.displayName || (viewedFriend ? `@${viewedFriend.profile.username}` : undefined)} quantities={activeQuantities} view={collectionView} />}</div>
           </div>
 
           <div className={`organizer-toolbar ${collectionView !== 'album' ? 'global-view' : ''}`}>
