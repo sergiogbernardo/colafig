@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { sections, stickers, type Sticker } from '../data/album';
+import { collectibleStickers, sections, slotQuantity, type Sticker } from '../data/album';
 
 type TradeOffer = {
   extraCopies: number;
@@ -7,9 +7,9 @@ type TradeOffer = {
 };
 
 function buildOffers(source: Record<string, number>, target: Record<string, number>) {
-  return stickers.flatMap((sticker): TradeOffer[] => {
+  return collectibleStickers.flatMap((sticker): TradeOffer[] => {
     const extraCopies = Math.max((source[sticker.id] ?? 0) - 1, 0);
-    return extraCopies > 0 && (target[sticker.id] ?? 0) === 0
+    return extraCopies > 0 && slotQuantity(sticker.slotId, target) === 0
       ? [{ extraCopies, sticker }]
       : [];
   });
@@ -29,7 +29,7 @@ function OfferList({ emptyText, offers }: { emptyText: string; offers: TradeOffe
           return (
             <article key={sticker.id}>
               <b>{sticker.number}</b>
-              <div><strong>{sticker.label}</strong><small>{section?.flag} {section?.name}</small></div>
+              <div><strong>{sticker.label}</strong><small>{sticker.variantType === 'replacement' ? `Substituta de ${sticker.replacesLabel}` : `${section?.flag} ${section?.name}`}</small></div>
               <span>{extraCopies} para troca</span>
             </article>
           );

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { sections, stickers } from '../data/album';
+import { collectibleStickers, sections, slotQuantity, stickers } from '../data/album';
 import { copyText, formatCollectionList, type CollectionListView } from '../lib/collectionList';
 import { createCollectionShare, revokeCollectionShare } from '../lib/shareRepository';
 
@@ -26,9 +26,9 @@ export function CollectionListActions({ albumName, albumSlug, canShare, ownerNam
     setShareUrl(null);
   }, [albumSlug, view]);
 
-  const items = useMemo(() => stickers.flatMap((sticker) => {
+  const items = useMemo(() => (view === 'missing' ? stickers : collectibleStickers).flatMap((sticker) => {
     const quantity = quantities[sticker.id] ?? 0;
-    const matches = view === 'missing' ? quantity === 0 : quantity > 1;
+    const matches = view === 'missing' ? slotQuantity(sticker.slotId, quantities) === 0 : quantity > 1;
     if (!matches) return [];
     return [{
       code: sticker.number,

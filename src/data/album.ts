@@ -1,10 +1,14 @@
 import { playerNames } from './playerNames';
+import { replacementDefinitions } from './replacementDefinitions';
 
 export type Sticker = {
   id: string;
   number: string;
   label: string;
   section: string;
+  slotId: string;
+  variantType: 'original' | 'replacement';
+  replacesLabel?: string;
 };
 
 export type AlbumSection = {
@@ -108,6 +112,8 @@ const specialStickers: Sticker[] = specialNames.map((label, index) => ({
   number: index === 0 ? '00' : `FWC ${index}`,
   label,
   section: 'fwc',
+  slotId: index === 0 ? '00' : `fwc-${index}`,
+  variantType: 'original',
 }));
 
 const teamStickers: Sticker[] = sections.slice(1).flatMap((section) =>
@@ -119,19 +125,58 @@ const teamStickers: Sticker[] = sections.slice(1).flatMap((section) =>
         ? `Foto da seleção — ${section.name}`
         : playerNames[`${section.short}${position}`] ?? `Jogador ${position}`;
 
+    const id = `${section.id}-${position}`;
     return {
-      id: `${section.id}-${position}`,
+      id,
       number: `${section.short} ${position}`,
       label,
       section: section.id,
+      slotId: id,
+      variantType: 'original' as const,
     };
   }),
 );
 
 export const stickers: Sticker[] = [...specialStickers, ...teamStickers];
 
-if (sections.length !== 49 || stickers.length !== 980) {
-  throw new Error('O catálogo principal do ColaFig deve ter 49 seções e 980 figurinhas.');
+const originalByLabel = new Map(stickers.map((sticker) => [sticker.label, sticker]));
+
+export const replacementStickers: Sticker[] = replacementDefinitions.map(({ incoming, outgoing }) => {
+  const original = originalByLabel.get(outgoing);
+  if (!original) throw new Error(`Figurinha original não encontrada para a substituta: ${incoming} → ${outgoing}.`);
+  return {
+    id: `replacement-${original.id}`,
+    number: `${original.number} S`,
+    label: incoming,
+    section: original.section,
+    slotId: original.id,
+    variantType: 'replacement',
+    replacesLabel: outgoing,
+  };
+});
+
+export const collectibleStickers: Sticker[] = [...stickers, ...replacementStickers];
+
+export const replacementsBySlot = replacementStickers.reduce<Record<string, Sticker[]>>((groups, sticker) => {
+  groups[sticker.slotId] = [...(groups[sticker.slotId] ?? []), sticker];
+  return groups;
+}, {});
+
+export const collectiblesBySlot = collectibleStickers.reduce<Record<string, Sticker[]>>((groups, sticker) => {
+  groups[sticker.slotId] = [...(groups[sticker.slotId] ?? []), sticker];
+  return groups;
+}, {});
+
+export function collectiblesForSlot(slotId: string) {
+  return collectiblesBySlot[slotId] ?? [];
+}
+
+export function slotQuantity(slotId: string, quantities: Record<string, number>) {
+  return collectiblesForSlot(slotId).reduce((total, sticker) => total + (quantities[sticker.id] ?? 0), 0);
+}
+
+if (sections.length !== 49 || stickers.length !== 980 || replacementStickers.length !== 118) {
+  throw new Error('O catálogo principal do ColaFig deve ter 49 seções, 980 espaços e 118 substitutas.');
 }
 
 export const initialQuantities: Record<string, number> = {};

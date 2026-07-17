@@ -4,7 +4,17 @@ import { FriendsPage } from './components/FriendsPage';
 import { CollectionListActions } from './components/CollectionListActions';
 import { PublicSharePage } from './components/PublicSharePage';
 import { TradeComparison } from './components/TradeComparison';
-import { albumCatalog, initialQuantities, sections, stickers } from './data/album';
+import {
+  albumCatalog,
+  collectibleStickers,
+  collectiblesForSlot,
+  initialQuantities,
+  replacementsBySlot,
+  sections,
+  slotQuantity,
+  stickers,
+  type Sticker,
+} from './data/album';
 import { loadRemoteCollection, migrateCollection, saveStickerQuantity, saveUserAlbum, type RemoteCollectionState } from './lib/collectionRepository';
 import type { PublicProfile } from './lib/socialRepository';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
@@ -46,6 +56,50 @@ function normalizeSearch(value: string) {
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
     .trim();
+}
+
+function QuantityControl({ label, onChange, quantity }: {
+  label: string;
+  onChange: (delta: number) => void;
+  quantity: number;
+}) {
+  return (
+    <div className="quantity-control" aria-label={`Quantidade de ${label}`}>
+      <button onClick={() => onChange(-1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button>
+      <b>{quantity}</b>
+      <button onClick={() => onChange(1)} type="button" aria-label="Adicionar uma">+</button>
+    </div>
+  );
+}
+
+function ReadOnlyQuantity({ quantity }: { quantity: number }) {
+  return <span className={`friend-quantity ${quantity > 0 ? 'has' : ''}`}>{quantity === 0 ? 'Falta' : quantity === 1 ? 'Colada' : `${quantity} cópias`}</span>;
+}
+
+function ReplacementOptions({ onUpdate, quantities: itemQuantities, readOnly, variants }: {
+  onUpdate: (id: string, delta: number) => void;
+  quantities: Record<string, number>;
+  readOnly: boolean;
+  variants: Sticker[];
+}) {
+  if (variants.length === 0) return null;
+  return (
+    <div className="replacement-options">
+      {variants.map((variant) => {
+        const quantity = itemQuantities[variant.id] ?? 0;
+        return (
+          <div className={`replacement-option ${quantity > 0 ? 'owned' : ''}`} key={variant.id}>
+            <span className="replacement-badge">Substituta</span>
+            <span className="replacement-copy"><strong>{variant.label}</strong><small>entra no lugar de {variant.replacesLabel}</small></span>
+            {quantity > 1 && <span className="compact-duplicate">+{quantity - 1}</span>}
+            {readOnly
+              ? <ReadOnlyQuantity quantity={quantity} />
+              : <QuantityControl label={variant.label} onChange={(delta) => onUpdate(variant.id, delta)} quantity={quantity} />}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function loadCollection(userId: string) {
@@ -111,7 +165,7 @@ function clearPendingAlbum(userId: string, slug: string) {
 
 function localizeRemoteCollection(remote: RemoteCollectionState, albumSlug = albumCatalog[0].slug) {
   const prefix = `${albumSlug}:`;
-  const localIdsByCode = Object.fromEntries(stickers.map((sticker) => [sticker.number, sticker.id]));
+  const localIdsByCode = Object.fromEntries(collectibleStickers.map((sticker) => [sticker.number, sticker.id]));
   const stickerIdsByLocalId: Record<string, string> = Object.fromEntries(
     Object.entries(remote.stickerIdsByKey)
       .filter(([key]) => key.startsWith(prefix))
@@ -486,8 +540,8 @@ export default function App() {
   }, [activeSection, collectionOwner, session]);
 
   const activeQuantities = viewedFriend?.quantities ?? quantities;
-  const owned = stickers.filter((sticker) => (activeQuantities[sticker.id] ?? 0) > 0).length;
-  const duplicateCount = stickers.reduce(
+  const owned = stickers.filter((sticker) => slotQuantity(sticker.id, activeQuantities) > 0).length;
+  const duplicateCount = collectibleStickers.reduce(
     (total, sticker) => total + Math.max((activeQuantities[sticker.id] ?? 0) - 1, 0),
     0,
   );
@@ -496,18 +550,21 @@ export default function App() {
 
   const normalizedSearch = normalizeSearch(search);
   const matchingStickers = useMemo(() => {
-    return stickers.filter((sticker) => {
+    const candidates = collectionView === 'duplicates' ? collectibleStickers : stickers;
+    return candidates.filter((sticker) => {
         const quantity = activeQuantities[sticker.id] ?? 0;
+        const totalInSlot = slotQuantity(sticker.slotId, activeQuantities);
         const section = sections.find((item) => item.id === sticker.section)!;
+        const slotVariants = collectiblesForSlot(sticker.slotId);
         const searchableText = normalizeSearch(
-          `${sticker.number} ${sticker.label} ${section.name} ${section.short}`,
+          `${sticker.number} ${sticker.label} ${slotVariants.map((variant) => variant.label).join(' ')} ${section.name} ${section.short}`,
         );
         const matchesSearch = normalizedSearch.length === 0 || searchableText.includes(normalizedSearch);
         const matchesCollectionView =
           collectionView === 'album' ||
-          (collectionView === 'missing' && quantity === 0) ||
+          (collectionView === 'missing' && totalInSlot === 0) ||
           (collectionView === 'duplicates' && quantity > 1);
-        const matchesFilter = filter === 'all' || quantity > 0;
+        const matchesFilter = filter === 'all' || totalInSlot > 0;
         return matchesSearch && matchesCollectionView && matchesFilter;
       });
   }, [activeQuantities, collectionView, filter, normalizedSearch]);
@@ -830,9 +887,9 @@ export default function App() {
           <div className="continuous-album">
             {stickerGroups.map(({ section, items }) => {
               const sectionIndex = sections.findIndex((item) => item.id === section.id);
-              const sectionOwned = stickers.filter((sticker) => sticker.section === section.id && (activeQuantities[sticker.id] ?? 0) > 0).length;
+              const sectionOwned = stickers.filter((sticker) => sticker.section === section.id && slotQuantity(sticker.id, activeQuantities) > 0).length;
               const sectionTotal = stickers.filter((sticker) => sticker.section === section.id).length;
-              const sectionDuplicates = stickers.reduce((total, sticker) => sticker.section === section.id ? total + Math.max((activeQuantities[sticker.id] ?? 0) - 1, 0) : total, 0);
+              const sectionDuplicates = collectibleStickers.reduce((total, sticker) => sticker.section === section.id ? total + Math.max((activeQuantities[sticker.id] ?? 0) - 1, 0) : total, 0);
               const sectionSummary = collectionView === 'missing'
                 ? `${sectionTotal - sectionOwned} faltantes`
                 : collectionView === 'duplicates'
@@ -848,21 +905,27 @@ export default function App() {
                   <div className={viewMode === 'compact' ? 'sticker-list' : 'sticker-grid'}>
                     {items.map((sticker) => {
                       const quantity = activeQuantities[sticker.id] ?? 0;
+                      const totalInSlot = slotQuantity(sticker.slotId, activeQuantities);
+                      const replacementVariants = sticker.variantType === 'original' ? replacementsBySlot[sticker.id] ?? [] : [];
+                      const isOwned = totalInSlot > 0;
                       if (viewMode === 'compact') {
                         return (
-                          <article className={`compact-sticker ${quantity > 0 ? 'owned' : 'missing'}`} key={sticker.id}>
+                          <article className={`compact-sticker ${isOwned ? 'owned' : 'missing'} ${replacementVariants.length > 0 ? 'has-replacements' : ''}`} key={sticker.id}>
                             <span className="compact-code">{sticker.number}</span>
-                            <div className="compact-copy"><strong>{sticker.label}</strong><small>{section.flag} {section.short} · {section.name}</small></div>
+                            <div className="compact-copy"><strong>{sticker.label}</strong><small>{sticker.variantType === 'replacement' ? `Substituta de ${sticker.replacesLabel}` : `${section.flag} ${section.short} · ${section.name}`}</small></div>
                             {quantity > 1 && <span className="compact-duplicate">{collectionView === 'duplicates' ? `${quantity} cópias · ${quantity - 1} para troca` : `+${quantity - 1}`}</span>}
-                            {viewedFriend ? <span className={`friend-quantity ${quantity > 0 ? 'has' : ''}`}>{quantity === 0 ? 'Falta' : quantity === 1 ? 'Colada' : `${quantity} cópias`}</span> : <div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}><button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button><b>{quantity}</b><button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button></div>}
+                            {viewedFriend ? <ReadOnlyQuantity quantity={quantity} /> : <QuantityControl label={sticker.number} onChange={(delta) => updateQuantity(sticker.id, delta)} quantity={quantity} />}
+                            <ReplacementOptions onUpdate={updateQuantity} quantities={activeQuantities} readOnly={Boolean(viewedFriend)} variants={replacementVariants} />
                           </article>
                         );
                       }
                       return (
-                        <article className={`sticker-card ${quantity > 0 ? 'owned' : 'missing'}`} key={sticker.id}>
+                        <article className={`sticker-card ${isOwned ? 'owned' : 'missing'} ${replacementVariants.length > 0 ? 'has-replacements' : ''}`} key={sticker.id}>
                           {quantity > 1 && <span className="duplicate-badge">+{quantity - 1}</span>}
                           <div className="sticker-art" style={{ '--team-color': section.color } as React.CSSProperties}><span className="sticker-code">{sticker.number}</span><strong>{section.short}</strong><i aria-hidden="true" /></div>
-                          <div className="sticker-info"><span>{sticker.label}</span>{viewedFriend ? <span className={`friend-quantity ${quantity > 0 ? 'has' : ''}`}>{quantity === 0 ? 'Falta' : quantity === 1 ? 'Colada' : `${quantity} cópias`}</span> : <div className="quantity-control" aria-label={`Quantidade de ${sticker.number}`}><button onClick={() => updateQuantity(sticker.id, -1)} disabled={quantity === 0} type="button" aria-label="Remover uma">−</button><b>{quantity}</b><button onClick={() => updateQuantity(sticker.id, 1)} type="button" aria-label="Adicionar uma">+</button></div>}</div>
+                          <div className="sticker-info"><span>{sticker.label}</span>{viewedFriend ? <ReadOnlyQuantity quantity={quantity} /> : <QuantityControl label={sticker.number} onChange={(delta) => updateQuantity(sticker.id, delta)} quantity={quantity} />}</div>
+                          {sticker.variantType === 'replacement' && <small className="standalone-replacement-note">Substituta de {sticker.replacesLabel}</small>}
+                          <ReplacementOptions onUpdate={updateQuantity} quantities={activeQuantities} readOnly={Boolean(viewedFriend)} variants={replacementVariants} />
                         </article>
                       );
                     })}
