@@ -9,6 +9,7 @@ import {
   collectibleStickers,
   collectiblesForSlot,
   initialQuantities,
+  replacementStickers,
   replacementsBySlot,
   sections,
   slotQuantity,
@@ -19,7 +20,7 @@ import { loadRemoteCollection, migrateCollection, saveStickerQuantity, saveUserA
 import type { PublicProfile } from './lib/socialRepository';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 
-type Filter = 'all' | 'owned';
+type Filter = 'all' | 'owned' | 'replacements';
 type CollectionView = 'album' | 'missing' | 'duplicates';
 type ViewMode = 'compact' | 'cards';
 type AuthMode = 'login' | 'signup' | 'forgot' | 'recovery';
@@ -550,7 +551,11 @@ export default function App() {
 
   const normalizedSearch = normalizeSearch(search);
   const matchingStickers = useMemo(() => {
-    const candidates = collectionView === 'duplicates' ? collectibleStickers : stickers;
+    const candidates = collectionView === 'duplicates'
+      ? collectibleStickers
+      : filter === 'replacements'
+        ? replacementStickers
+        : stickers;
     return candidates.filter((sticker) => {
         const quantity = activeQuantities[sticker.id] ?? 0;
         const totalInSlot = slotQuantity(sticker.slotId, activeQuantities);
@@ -564,7 +569,10 @@ export default function App() {
           collectionView === 'album' ||
           (collectionView === 'missing' && totalInSlot === 0) ||
           (collectionView === 'duplicates' && quantity > 1);
-        const matchesFilter = filter === 'all' || totalInSlot > 0;
+        const matchesFilter =
+          filter === 'all'
+          || (filter === 'owned' && totalInSlot > 0)
+          || (filter === 'replacements' && sticker.variantType === 'replacement');
         return matchesSearch && matchesCollectionView && matchesFilter;
       });
   }, [activeQuantities, collectionView, filter, normalizedSearch]);
@@ -874,7 +882,7 @@ export default function App() {
             </div>
             <div className="toolbar-lower">
               {collectionView === 'album' ? <div className="filters" aria-label="Filtrar figurinhas">
-                {([['all', 'Todas'], ['owned', 'Coladas']] as [Filter, string][]).map(([value, label]) => (
+                {([['all', 'Todas'], ['owned', 'Coladas'], ['replacements', `Substitutas (${replacementStickers.length})`]] as [Filter, string][]).map(([value, label]) => (
                   <button className={filter === value ? 'selected' : ''} key={value} onClick={() => setFilter(value)} type="button">{label}</button>
                 ))}
               </div> : <div className={`global-view-summary ${collectionView}`}><span>{collectionView === 'missing' ? '?' : '↺'}</span><b>{collectionView === 'missing' ? `${visibleStickers.length} figurinhas faltando` : `${duplicateCount} cópias extras em ${visibleStickers.length} figurinhas`}</b></div>}
@@ -907,7 +915,7 @@ export default function App() {
                       const quantity = activeQuantities[sticker.id] ?? 0;
                       const totalInSlot = slotQuantity(sticker.slotId, activeQuantities);
                       const replacementVariants = sticker.variantType === 'original' ? replacementsBySlot[sticker.id] ?? [] : [];
-                      const isOwned = totalInSlot > 0;
+                      const isOwned = sticker.variantType === 'replacement' ? quantity > 0 : totalInSlot > 0;
                       if (viewMode === 'compact') {
                         return (
                           <article className={`compact-sticker ${isOwned ? 'owned' : 'missing'} ${replacementVariants.length > 0 ? 'has-replacements' : ''}`} key={sticker.id}>
@@ -933,7 +941,7 @@ export default function App() {
                 </section>
               );
             })}
-            {visibleStickers.length === 0 && <div className="empty-state">{normalizedSearch ? 'Nenhuma figurinha encontrada para esta busca.' : collectionView === 'missing' ? 'Parabéns: não há figurinhas faltando nesta coleção.' : collectionView === 'duplicates' ? 'Você ainda não marcou nenhuma figurinha repetida.' : 'Nenhuma figurinha desta página corresponde ao filtro.'}</div>}
+            {visibleStickers.length === 0 && <div className="empty-state">{normalizedSearch ? 'Nenhuma figurinha encontrada para esta busca.' : collectionView === 'missing' ? 'Parabéns: não há figurinhas faltando nesta coleção.' : collectionView === 'duplicates' ? 'Você ainda não marcou nenhuma figurinha repetida.' : filter === 'replacements' ? 'Esta página não possui figurinhas substitutas.' : 'Nenhuma figurinha desta página corresponde ao filtro.'}</div>}
           </div>
 
           {collectionView === 'album' && !normalizedSearch && (
